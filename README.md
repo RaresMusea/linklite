@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LinkLite — URL Shortener + Analytics
 
-## Getting Started
+LinkLite is a lightweight URL Shortener built with Next.js.  
+It lets you turn long, messy URLs into clean short links and track basic click analytics.  
+The app is intentionally simple on “business logic” so you can focus on ops/infrastructure.
 
-First, run the development server:
+---
+
+## Features
+
+- **Create short links**
+    - Auto-generated codes or **custom aliases**
+    - Optional **expiry date**
+    - Public / Private visibility
+    - Optional tags
+
+- **Fast redirects**
+    - `/[code]` redirects instantly to the original URL
+    - Handles not found / expired links gracefully
+
+- **Dashboard**
+    - List and manage your links
+    - Total clicks per link
+    - Quick actions: copy / view analytics / delete
+
+- **Analytics (MVP)**
+    - Total clicks
+    - Clicks over time (optional extension)
+    - Basic referrer/device/country breakdown (optional extension)
+
+---
+
+## Tech Stack
+
+- **Next.js 16.x.x (App Router)**
+- **TypeScript**
+- **UI:** Tailwind / Shadcn-UI 
+- **Database: **Postgres (RDS/Neon) + Prisma ORM**
+- **CI:** GitHub Actions
+
+> The project is structured so the storage layer can be swapped without rewriting core logic.
+
+---
+
+[//]: # (## Project Structure &#40;high level&#41;)
+
+---
+
+## Getting Started (locally)
+
+### 1) Install dependencies
+
+```bash
+npm install
+```
+
+### 2) Run the dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+[//]: # (npm test           # Tests &#40;if configured&#41;)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+npm run dev        # Start Next.js in dev mode
+npm run build      # Production build
+npm run start      # Run production server locally
+npm run lint       # ESLint
+npm run typecheck  # TypeScript checks
+```
 
-## Learn More
+[//]: # (### Deployment &#40;AWS&#41;)
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
