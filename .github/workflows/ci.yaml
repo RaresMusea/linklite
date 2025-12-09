@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["main", "testing", "develop"]
+    branches: [ "main", "testing", "develop" ]
   pull_request:
-    branches: ["main", "testing", "develop"]
+    branches: [ "main", "testing", "develop" ]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -14,17 +14,30 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: "Checkout"
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: "Setup Node.js"
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "pnpm"
+          cache: "pnpm" # ✅ cache pnpm
 
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
 
-      - name: Build Next.js app
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: "Linter"
+        run: pnpm run lint
+
+      - name: "TypeScript typecheck"
+        run: pnpm run typecheck
+
+      - name: Build (only testing/main)
         if: github.ref == 'refs/heads/testing' || github.ref == 'refs/heads/main'
-        run: npm run build
+        run: pnpm run build
