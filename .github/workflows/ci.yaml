@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "testing", "develop"]
+  pull_request:
+    branches: ["main", "testing", "develop"]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+
+      - name: Build Next.js app
+        if: github.ref == 'refs/heads/testing' || github.ref == 'refs/heads/main'
+        run: npm run build
