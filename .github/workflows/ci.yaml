@@ -21,16 +21,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "pnpm" # ✅ cache pnpm
+          cache: "pnpm"
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
           run_install: false
-
-      - name: Install pnpm dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: "Linter"
         run: pnpm run lint
