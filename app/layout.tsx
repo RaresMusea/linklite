@@ -18,6 +18,12 @@ export const metadata: Metadata = {
     title: 'LinkLite',
     description:
         'LinkLite is an URL shortener which allows users to shorten out a long link and also view some accessibility related stats',
+    icons: [
+        { rel: 'icon', url: '/favicon.ico', sizes: 'any' },
+        { rel: 'icon', url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+        { rel: 'icon', url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+        { rel: 'apple-touch-icon', url: '/apple-touch-icon.png', sizes: '180x180' },
+    ],
 };
 
 export default function RootLayout({
