@@ -56,7 +56,6 @@ function FeatureCard({
     return (
         // WRAPPER: doar parallax
         <motion.div style={{ y }}>
-            {/* CARD: doar animația de intrare */}
             <motion.div
                 className="group p-8 rounded-2xl border border-border bg-card shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-primary/60"
                 initial={{ opacity: 0, scale: 0.97 }}
