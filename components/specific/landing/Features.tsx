@@ -51,11 +51,7 @@ function FeatureCard({
     const Icon = feature.icon;
 
     const rowIndex = Math.floor(index / 3);
-    const y = useTransform(
-        scrollYProgress,
-        [0, 1],
-        [rowIndex * 8, rowIndex * (-16)]
-    );
+    const y = useTransform(scrollYProgress, [0, 1], [rowIndex * 8, rowIndex * -16]);
 
     return (
         <motion.div
@@ -97,7 +93,7 @@ export function Features() {
                     transition={{ duration: 0.4, ease: 'easeOut' }}
                 >
                     <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4 leading-tight">
-                        Everything you need to manage
+                        Everything you need to manage&nbsp;
                         <motion.span
                             initial={{ color: 'var(--foreground)' }}
                             whileInView={{ color: 'var(--primary)' }}
