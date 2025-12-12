@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: linklite-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: linklite
+      POSTGRES_PASSWORD: linklite
+      POSTGRES_DB: linklite
+    ports:
+      - '5432:5432'
+    volumes:
+      - linklite-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U linklite']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  linklite-db-data:

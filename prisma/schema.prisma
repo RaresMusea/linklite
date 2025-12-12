@@ -1,0 +1,16 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Link {
+  id         String   @id @default(cuid())
+  slug       String   @unique
+  targetUrl  String
+  createdAt  DateTime @default(now())
+  ownerId    String?  // WILL BE USED LATER ON
+}
