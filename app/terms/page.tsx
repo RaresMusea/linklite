@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import TermsContent from '@/components/shared/terms_conditions/TermsContent';
+import TermsContent from '@/components/shared/footer/terms_conditions/TermsContent';
 
 export const metadata: Metadata = {
     title: 'Terms & Conditions | LinkLite',

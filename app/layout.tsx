@@ -4,7 +4,7 @@ import './globals.css';
 import { Header } from '@/components/specific/landing/Header';
 import React from 'react';
 import { ThemeProvider } from 'next-themes';
-import { Footer } from '@/components/shared/Footer';
+import { Footer } from '@/components/shared/footer/Footer';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
