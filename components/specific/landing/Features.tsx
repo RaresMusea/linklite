@@ -54,24 +54,27 @@ function FeatureCard({
     const y = useTransform(scrollYProgress, [0, 1], [rowIndex * 8, rowIndex * -16]);
 
     return (
-        <motion.div
-            style={{ y }}
-            className="group p-8 rounded-2xl border border-border bg-card shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-primary/60"
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: 0.4, delay: index * 0.06, ease: 'easeOut' }}
-        >
-            <div className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-linear-to-br from-primary to-primary/70 shadow-sm transition-transform duration-300 group-hover:scale-110">
-                <Icon className="h-6 w-6 text-primary-foreground" />
-            </div>
+        // WRAPPER: doar parallax
+        <motion.div style={{ y }}>
+            <motion.div
+                className="group p-8 rounded-2xl border border-border bg-card shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-primary/60"
+                initial={{ opacity: 0, scale: 0.97 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ duration: 0.35, delay: index * 0.06, ease: 'easeOut' }}
+            >
+                <div className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-linear-to-br from-primary to-primary/70 shadow-sm transition-transform duration-300 group-hover:scale-110">
+                    <Icon className="h-6 w-6 text-primary-foreground" />
+                </div>
 
-            <h3 className="text-xl font-semibold text-foreground mb-2">{feature.title}</h3>
+                <h3 className="text-xl font-semibold text-foreground mb-2">{feature.title}</h3>
 
-            <p className="text-muted-foreground">{feature.description}</p>
+                <p className="text-muted-foreground">{feature.description}</p>
+            </motion.div>
         </motion.div>
     );
 }
+
 
 export function Features() {
     const ref = useRef<HTMLDivElement | null>(null);

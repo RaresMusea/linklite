@@ -1,12 +1,13 @@
 import {Link2} from "lucide-react";
+import { ThemeToggler } from '@/components/shared/ThemeToggler';
+import Link from 'next/link';
 
 export function Header() {
     return (
         <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
             <div className="max-w-7xl mx-auto px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
-                    {/* Logo */}
-                    <div className="flex items-center gap-2">
+                    <Link href="/" className="flex items-center gap-2">
                         <div
                             className="w-10 h-10 bg-linear-to-br from-primary to-primary/70 rounded-xl flex items-center justify-center shadow-sm">
                             <Link2 className="h-6 w-6 text-primary-foreground"/>
@@ -14,7 +15,8 @@ export function Header() {
                         <span className="text-xl sm:text-2xl font-bold text-foreground">
               Link<span className="text-primary">Lite</span>
             </span>
-                    </div>
+                    </Link>
+                    <ThemeToggler />
 
                     {/*/!* Actions - desktop *!/*/}
                     {/*<div className="hidden sm:flex items-center gap-3">*/}
