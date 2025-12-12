@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, type Variants } from 'framer-motion';
+import { motion, stagger, type Variants } from 'framer-motion';
 import { Zap } from 'lucide-react';
 import LinkShortener from '@/components/specific/link-shortener/LinkShortener';
 
@@ -11,7 +11,7 @@ const heroVariants: Variants = {
         y: 0,
         transition: {
             duration: 0.5,
-            staggerChildren: 0.1,
+            delayChildren: stagger(0.1),
         },
     },
 };
