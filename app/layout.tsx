@@ -4,6 +4,7 @@ import './globals.css';
 import { Header } from '@/components/specific/landing/Header';
 import React from 'react';
 import { ThemeProvider } from 'next-themes';
+import { Footer } from '@/components/shared/footer/Footer';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -33,11 +34,12 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en" suppressHydrationWarning>
+        <html lang="en" suppressHydrationWarning className="scroll-smooth">
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
                     <Header />
                     {children}
+                    <Footer />
                 </ThemeProvider>
             </body>
         </html>
