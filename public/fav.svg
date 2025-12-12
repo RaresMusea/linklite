@@ -1,0 +1,37 @@
+<svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+>
+    <defs>
+        <linearGradient id="linklite-favicon-bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#f97316" />
+            <stop offset="100%" stop-color="#facc15" />
+        </linearGradient>
+    </defs>
+
+    <!-- chenar rotunjit, perfect încadrat în viewBox -->
+    <rect
+            x="2"
+            y="2"
+            width="20"
+            height="20"
+            rx="6"
+            fill="url(#linklite-favicon-bg)"
+    />
+
+    <!-- iconița de link, micșorată și cu padding -->
+    <g
+            transform="translate(1.86 1.5) scale(0.85)"
+            stroke="#ffffff"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+    >
+        <path d="M9 17H7A5 5 0 0 1 7 7h2" />
+        <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
+        <line x1="8" y1="12" x2="16" y2="12" />
+    </g>
+</svg>
