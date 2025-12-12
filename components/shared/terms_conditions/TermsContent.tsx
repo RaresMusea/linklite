@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion, stagger, Variants } from 'framer-motion';
-import { termsSections } from '@/app/terms/TermsSections';
+import { termsSections } from '@/components/shared/terms_conditions/TermsSections';
 
 const containerVariants: Variants = {
     hidden: { opacity: 0, y: 16 },
