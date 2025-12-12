@@ -4,6 +4,7 @@ import './globals.css';
 import { Header } from '@/components/specific/landing/Header';
 import React from 'react';
 import { ThemeProvider } from 'next-themes';
+import { Footer } from '@/components/shared/Footer';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -38,6 +39,7 @@ export default function RootLayout({
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
                     <Header />
                     {children}
+                    <Footer />
                 </ThemeProvider>
             </body>
         </html>
