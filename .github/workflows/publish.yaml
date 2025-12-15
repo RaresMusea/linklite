@@ -40,6 +40,6 @@ jobs:
           context: .
           push: true
           platforms: linux/arm64,linux/amd64
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.tags.outputs.tags }}
           build-args: |
             DATABASE_URL=postgresql://user:pass@localhost:5432/db?schema=public
