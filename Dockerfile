@@ -16,6 +16,9 @@ COPY . .
 RUN apt-get update -y && apt-get install -y openssl
 
 # Prisma client
+
+ARG DATABASE_URL
+ENV DATABASE_URL=$DATABASE_URL
 RUN pnpm prisma generate
 
 # Build Next.js
