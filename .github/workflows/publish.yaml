@@ -31,9 +31,20 @@ jobs:
       - name: Compute tags
         id: tags
         run: |
-          REPO_RAW="ghcr.io/${GITHUB_REPOSITORY}"
-          REPO="$(echo "$REPO_RAW" | tr '[:upper:]' '[:lower:]')"
-          BRANCH="${BRANCH_RAW//\//-}"
+          set -euo pipefail
+          
+          # ghcr.io/owner/repo -> lowercase
+          REPO="$(echo "ghcr.io/${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          
+          # branch name robust (works even if GITHUB_REF_NAME is weird)
+          BRANCH_RAW="${GITHUB_REF#refs/heads/}"
+          if [ "$BRANCH_RAW" = "$GITHUB_REF" ]; then
+            BRANCH_RAW="${GITHUB_REF_NAME:-}"
+          fi
+          
+          # sanitize + lowercase (replace / with -, remove invalid chars)
+          BRANCH="$(echo "$BRANCH_RAW" | tr '[:upper:]' '[:lower:]' | tr '/' '-' | sed 's/[^a-z0-9_.-]/-/g')"
+          [ -n "$BRANCH" ] || BRANCH="unknown"
           
           TAGS="${REPO}:${BRANCH}
           ${REPO}:${GITHUB_SHA}"
