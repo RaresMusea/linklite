@@ -32,8 +32,9 @@ jobs:
         id: tags
         run: |
           REPO="ghcr.io/${GITHUB_REPOSITORY}"
-          BRANCH="${GITHUB_REF_NAME}"
-
+          BRANCH_RAW="${GITHUB_REF_NAME}"
+          BRANCH="${BRANCH_RAW//\//-}"
+          
           TAGS="${REPO}:${BRANCH}
           ${REPO}:${GITHUB_SHA}"
           
