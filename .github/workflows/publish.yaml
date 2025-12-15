@@ -31,8 +31,8 @@ jobs:
       - name: Compute tags
         id: tags
         run: |
-          REPO="ghcr.io/${GITHUB_REPOSITORY}"
-          BRANCH_RAW="${GITHUB_REF_NAME}"
+          REPO_RAW="ghcr.io/${GITHUB_REPOSITORY}"
+          REPO="$(echo "$REPO_RAW" | tr '[:upper:]' '[:lower:]')"
           BRANCH="${BRANCH_RAW//\//-}"
           
           TAGS="${REPO}:${BRANCH}
