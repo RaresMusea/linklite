@@ -1,0 +1,50 @@
+name: Publish (GHCR)
+
+on:
+  push:
+    branches: [ "develop", "testing", "main" ]
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: tags
+        run: |
+          REPO="ghcr.io/${GITHUB_REPOSITORY}"
+          BRANCH="${GITHUB_REF_NAME}"
+
+          TAGS="${REPO}:${BRANCH}
+          ${REPO}:${GITHUB_SHA}"
+          
+          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$TAGS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+        context: .
+        push: true
+        platforms: linux/arm64,linux/amd64
+        tags: ${{ steps.tags.outputs.tags }}
