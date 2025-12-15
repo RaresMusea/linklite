@@ -31,27 +31,8 @@ jobs:
       - name: Compute tags
         id: tags
         run: |
-          set -euo pipefail
-          
-          # ghcr.io/owner/repo -> lowercase
-          REPO="$(echo "ghcr.io/${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
-          
-          # branch name robust (works even if GITHUB_REF_NAME is weird)
-          BRANCH_RAW="${GITHUB_REF#refs/heads/}"
-          if [ "$BRANCH_RAW" = "$GITHUB_REF" ]; then
-            BRANCH_RAW="${GITHUB_REF_NAME:-}"
-          fi
-          
-          # sanitize + lowercase (replace / with -, remove invalid chars)
-          BRANCH="$(echo "$BRANCH_RAW" | tr '[:upper:]' '[:lower:]' | tr '/' '-' | sed 's/[^a-z0-9_.-]/-/g')"
-          [ -n "$BRANCH" ] || BRANCH="unknown"
-          
-          TAGS="${REPO}:${BRANCH}
-          ${REPO}:${GITHUB_SHA}"
-          
-          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$TAGS" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          chmod +x .github/scripts/publish/compute_oci_tag.sh
+          .github/scripts/publish/compute_oci_tag.sh >> "$GITHUB_OUTPUT"
 
       - name: Build & push (multi-arch)
         uses: docker/build-push-action@v6
@@ -59,6 +40,6 @@ jobs:
           context: .
           push: true
           platforms: linux/arm64,linux/amd64
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
           build-args: |
             DATABASE_URL=postgresql://user:pass@localhost:5432/db?schema=public
