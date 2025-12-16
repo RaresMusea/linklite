@@ -13,12 +13,12 @@ else
   BRANCH="$(echo "$BRANCH" | tr '[:upper:]' '[:lower:]' | tr '/' '-' | sed 's/[^a-z0-9_.-]/-/g')"
 
 case "$BRANCH" in
-  testing) ENV="testing" ;;
-  main)    ENV="prod" ;;
-  *)       ENV="dev" ;;
+  testing) ENV_SUFFIX="testing" ;;
+  main)    ENV_SUFFIX="prod" ;;
+  *)       ENV_SUFFIX="testing" ;;
 esac
 
-  TAGS="${REPO}:${BRANCH}-${ENV_SUFFIX}
+TAGS="${REPO}:${BRANCH}-${ENV_SUFFIX}
 ${REPO}:${GITHUB_SHA}-${ENV_SUFFIX}
 ${REPO}:latest-${ENV_SUFFIX}"
 fi
