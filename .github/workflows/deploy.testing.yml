@@ -16,6 +16,12 @@ jobs:
       contents: read
 
     steps:
+      - name: Debug GitHub context
+        run: |
+          echo "repo=${{ github.repository }}"
+          echo "event=${{ github.event_name }}"
+          echo "ref=${{ github.ref }}"
+    
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
