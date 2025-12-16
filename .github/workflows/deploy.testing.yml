@@ -1,4 +1,4 @@
-name: Deploy to testing environment
+name: CD (testing environment)
 
 on:
   push:
