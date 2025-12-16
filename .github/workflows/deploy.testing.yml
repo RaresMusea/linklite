@@ -2,7 +2,7 @@ name: CD (testing environment)
 
 on:
   push:
-    branches: [ "testing", "develop" ]
+    branches: [ "testing", "develop", "feature/cd-testing" ]
 
 concurrency:
   group: deploy-testing
