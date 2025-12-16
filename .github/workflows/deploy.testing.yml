@@ -33,7 +33,7 @@ jobs:
               "sudo mkdir -p /opt/linklite",
               "sudo chown ec2-user:ec2-user /opt/linklite",
               "cd /opt/linklite",
-              "curl -fsSL https://raw.githubusercontent.com/RaresMusea/linklite/feature/cd-testing/.github/scripts/deploy/testing/deploy.sh -o deploy.sh"
+              "curl -fsSL https://raw.githubusercontent.com/RaresMusea/linklite/feature/cd-testing/.github/scripts/deploy/testing/deploy.sh -o deploy.sh",
               "chmod +x deploy.sh",
               "./deploy.sh"
             ]'
