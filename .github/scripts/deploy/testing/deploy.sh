@@ -70,4 +70,9 @@ EOF
 
 echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 docker pull "$IMAGE"
-docker compose -f docker-compose.testing.yml up -d
+
+if docker compose version >/dev/null 2>&1; then
+  sudo docker compose -f docker-compose.testing.yml up -d
+else
+  sudo docker-compose -f docker-compose.testing.yml up -d
+fi
