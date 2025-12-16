@@ -71,4 +71,8 @@ EOF
 echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 docker pull "$IMAGE"
 
-sudo docker-compose -f docker-compose.testing.yml up -d
+sudo docker-compose -f docker-compose.testing.yml up -d db
+
+sudo docker-compose -f docker-compose.testing.yml run --rm app pnpm prisma migrate deploy
+
+sudo docker-compose -f docker-compose.testing.yml up -d --no-deps --force-recreate app
