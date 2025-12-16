@@ -12,11 +12,11 @@ else
   BRANCH="${GITHUB_REF#refs/heads/}"
   BRANCH="$(echo "$BRANCH" | tr '[:upper:]' '[:lower:]' | tr '/' '-' | sed 's/[^a-z0-9_.-]/-/g')"
 
-  case "$BRANCH" in
-    develop) ENV_SUFFIX="testing" ;;
-    main)    ENV_SUFFIX="prod" ;;
-    *)       ENV_SUFFIX="dev" ;;
-  esac
+case "$BRANCH" in
+  testing) ENV="testing" ;;
+  main)    ENV="prod" ;;
+  *)       ENV="dev" ;;
+esac
 
   TAGS="${REPO}:${BRANCH}-${ENV_SUFFIX}
 ${REPO}:${GITHUB_SHA}-${ENV_SUFFIX}
