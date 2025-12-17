@@ -1,8 +1,9 @@
 name: CD (testing environment)
 
 on:
-  push:
-    branches: [ "testing", "develop", "feature/cd-testing" ]
+  workflow_run:
+    workflows: [ "Publish (GHCR)" ]
+    types: [ completed ]
 
 concurrency:
   group: deploy-testing
