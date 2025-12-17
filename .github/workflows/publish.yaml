@@ -2,7 +2,7 @@ name: Publish (GHCR)
 
 on:
   push:
-    branches: ["testing", "main", "feature/cd-testing" ]
+    branches: [ "testing", "main" ]
 
 concurrency:
   group: publish-${{ github.ref }}
