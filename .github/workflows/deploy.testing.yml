@@ -1,8 +1,9 @@
 name: CD (testing environment)
 
 on:
-  push:
-    branches: [ "testing", "develop" ]
+  workflow_run:
+    workflows: [ "Publish (GHCR)" ]
+    types: [ completed ]
 
 concurrency:
   group: deploy-testing
@@ -10,41 +11,32 @@ concurrency:
 
 jobs:
   deploy:
+    if: |
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       id-token: write   # OIDC
       contents: read
 
     steps:
-      - name: Debug GitHub context
-        run: |
-          echo "repo=${{ github.repository }}"
-          echo "event=${{ github.event_name }}"
-          echo "ref=${{ github.ref }}"
-    
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-north-1
 
-      - name: Deploy to EC2 via SSM (write files + run)
+      - name: Deploy to EC2 (SSM)
         run: |
           aws ssm send-command \
             --region eu-north-1 \
             --instance-ids "${{ secrets.AWS_TESTING_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy LinkLite testing" \
             --parameters 'commands=[
-              "set -euo pipefail",
+              "set -e",
               "sudo mkdir -p /opt/linklite",
               "sudo chown ec2-user:ec2-user /opt/linklite",
               "cd /opt/linklite",
-
-              "cat > docker-compose.testing.yml <<'\''YAML'\''\nservices:\n  db:\n    image: postgres:16\n    container_name: linklite-postgres\n    restart: unless-stopped\n    env_file:\n      - .env\n    environment:\n      POSTGRES_USER: ${POSTGRES_USER}\n      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}\n      POSTGRES_DB: ${POSTGRES_DB}\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U $POSTGRES_USER -d $POSTGRES_DB\"]\n      interval: 5s\n      timeout: 5s\n      retries: 20\n\n  app:\n    image: ghcr.io/raresmusea/linklite:latest-testing\n    container_name: linklite-app\n    restart: unless-stopped\n    env_file:\n      - .env\n    ports:\n      - \"3000:3000\"\n    depends_on:\n      db:\n        condition: service_healthy\n    command: >\n      sh -lc \"pnpm prisma migrate deploy && pnpm start\"\n\nvolumes:\n  pgdata:\nYAML",
-
-              "cat > deploy.sh <<'\''BASH'\''\n#!/usr/bin/env bash\nset -euo pipefail\n\nAPP_ENV=\"testing\"\nAWS_REGION=\"eu-north-1\"\nAPP_DIR=\"/opt/linklite\"\nIMAGE=\"ghcr.io/raresmusea/linklite:latest-testing\"\nGHCR_USER=\"raresmusea\"\n\ncd \"$APP_DIR\"\n\ngetp () {\n  aws ssm get-parameter \\\n    --with-decryption \\\n    --region \"$AWS_REGION\" \\\n    --name \"/linklite/${APP_ENV}/$1\" \\\n    --query \"Parameter.Value\" \\\n    --output text\n}\n\necho \"Generating .env from SSM...\"\nPOSTGRES_USER=\"$(getp POSTGRES_USER)\"\nPOSTGRES_PASSWORD=\"$(getp POSTGRES_PASSWORD)\"\nPOSTGRES_DB=\"$(getp POSTGRES_DB)\"\nPRISMA_CLIENT_ENGINE_TYPE=\"$(getp PRISMA_CLIENT_ENGINE_TYPE)\"\n\n# Build DATABASE_URL from components to avoid mismatches\nDATABASE_URL=\"postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public\"\n\ncat > .env <<EOF\nPOSTGRES_USER=${POSTGRES_USER}\nPOSTGRES_PASSWORD=${POSTGRES_PASSWORD}\nPOSTGRES_DB=${POSTGRES_DB}\nDATABASE_URL=${DATABASE_URL}\nPRISMA_CLIENT_ENGINE_TYPE=${PRISMA_CLIENT_ENGINE_TYPE}\nEOF\nchmod 600 .env\n\necho \"Logging into GHCR...\"\nGHCR_TOKEN=\"$(getp GHCR_TOKEN)\"\necho \"$GHCR_TOKEN\" | sudo docker login ghcr.io -u \"$GHCR_USER\" --password-stdin\n\necho \"Pulling image...\"\nsudo docker pull \"$IMAGE\"\n\necho \"Starting services...\"\nsudo docker compose -f docker-compose.testing.yml up -d\n\necho \"Done\"\nBASH",
-
+              "curl -fsSL https://raw.githubusercontent.com/RaresMusea/linklite/feature/cd-testing/.github/scripts/deploy/testing/deploy.sh -o deploy.sh",
               "chmod +x deploy.sh",
               "./deploy.sh"
             ]'
