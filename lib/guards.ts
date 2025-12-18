@@ -25,7 +25,7 @@ function has(x: Record<string, unknown>, key: string, primitiveDataTypeStr: Data
 }
 
 function hasNullable(x: Record<string, unknown>, key: string, primitiveDataTypeStr: DataTypeTag) {
-    return x[key] === null || x[key] === primitiveDataTypeStr;
+    return x[key] === null || typeof x[key] === primitiveDataTypeStr;
 }
 
 function hasNullableOrUndefined(x: Record<string, unknown>, key: string, primitiveDataTypeStr: DataTypeTag) {
