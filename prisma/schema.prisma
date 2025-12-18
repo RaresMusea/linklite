@@ -8,9 +8,9 @@ datasource db {
 }
 
 model Link {
-  id         String   @id @default(cuid())
-  slug       String   @unique
-  targetUrl  String
-  createdAt  DateTime @default(now())
-  ownerId    String?  // WILL BE USED LATER ON
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  targetUrl String   @map("target_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  ownerId   String?  @map("owner_id") // WILL BE USED LATER ON
 }
