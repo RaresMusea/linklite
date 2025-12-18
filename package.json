@@ -11,7 +11,7 @@
         "test": "vitest",
         "test:run": "vitest run",
         "test:watch": "vitest",
-        "test:integration": "docker compose -f docker-compose.test.yml --env-file .env.test up -d && bash -lc 'set -a; source .env.test; set +a; pnpm prisma migrate deploy && pnpm vitest run tests/integration'"
+        "test:integration": "docker compose --env-file .env.test up -d db && bash -lc 'set -a; source .env.test; set +a; pnpm prisma migrate deploy && pnpm vitest run tests/integration'"
     },
     "dependencies": {
         "@prisma/adapter-pg": "^7.1.0",
