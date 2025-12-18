@@ -26,3 +26,14 @@ export function isApiRouteResponseOf<T>(x: unknown, isData: (v: unknown) => v is
 
     return 'error' in x && typeof x.error === 'string' && (x.status === undefined || typeof x.status === 'number');
 }
+
+export function generateSlug(length = 6): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let slug: string = '';
+
+    for (let i = 0; i < length; i++) {
+        slug += chars[Math.floor(Math.random() * chars.length)];
+    }
+
+    return slug;
+}
