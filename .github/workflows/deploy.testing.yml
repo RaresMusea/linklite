@@ -1,0 +1,42 @@
+name: CD (testing environment)
+
+on:
+  workflow_run:
+    workflows: [ "Publish (GHCR)" ]
+    types: [ completed ]
+
+concurrency:
+  group: deploy-testing
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: |
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # OIDC
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-north-1
+
+      - name: Deploy to EC2 (SSM)
+        run: |
+          aws ssm send-command \
+            --region eu-north-1 \
+            --instance-ids "${{ secrets.AWS_TESTING_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "set -e",
+              "sudo mkdir -p /opt/linklite",
+              "sudo chown ec2-user:ec2-user /opt/linklite",
+              "cd /opt/linklite",
+              "curl -fsSL https://raw.githubusercontent.com/RaresMusea/linklite/feature/cd-testing/.github/scripts/deploy/testing/deploy.sh -o deploy.sh",
+              "chmod +x deploy.sh",
+              "./deploy.sh"
+            ]'
