@@ -2,7 +2,7 @@ name: CD (testing environment)
 
 on:
   workflow_run:
-    workflows: [ "Publish (GHCR)" ]
+    workflows: [ "Publish (GHCR CI)" ]
     types: [ completed ]
 
 concurrency:

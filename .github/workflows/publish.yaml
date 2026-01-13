@@ -1,4 +1,4 @@
-name: Publish (GHCR)
+name: Publish (GHCR CI)
 
 on:
   push:
