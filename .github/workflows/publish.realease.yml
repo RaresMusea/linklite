@@ -27,8 +27,10 @@ jobs:
 
       - name: Compute version
         id: version
+        shell: bash
         run: |
-          REPO="ghcr.io/${{ github.repository_owner }}/linklite"
+          OWNER_LC="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          REPO="ghcr.io/${OWNER_LC}/linklite"
           VERSION="${GITHUB_REF_NAME#v}"
 
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
