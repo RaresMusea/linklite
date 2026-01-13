@@ -31,14 +31,14 @@ jobs:
       - name: Compute tags
         id: tags
         run: |
-          REPO="ghcr/io/${{github.repository_owner}}/linklite"
+          REPO="ghcr.io/${{github.repository_owner}}/linklite"
           SHA="${{github.sha}}"
-          BRANCH=${{github.ref_name}}"
+          BRANCH="${{github.ref_name}}"
           
           TAG_SHA="${REPO}:${BRANCH}-${SHA}"
           TAG_BRANCH="${REPO}:${BRANCH}"
           
-          echo "tags=${TAG_SHA}, ${TAG_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "tags=${TAG_SHA},${TAG_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "tag_sha=${TAG_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Build & push (multi-arch)
