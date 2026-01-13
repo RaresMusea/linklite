@@ -30,8 +30,10 @@ jobs:
 
       - name: Compute tags
         id: tags
+        shell: bash
         run: |
-          REPO="ghcr.io/${{github.repository_owner}}/linklite"
+          OWNER_LC="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          REPO="ghcr.io/${OWNER_LC}/linklite"
           SHA="${{github.sha}}"
           BRANCH="${{github.ref_name}}"
           
