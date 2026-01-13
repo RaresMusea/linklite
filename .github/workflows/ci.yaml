@@ -2,17 +2,26 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "testing", "develop" ]
+    branches: [ "develop", "testing", "main" ]
+    paths-ignore:
+      - "**/*.md"
   pull_request:
-    branches: [ "main", "testing", "develop" ]
+    branches: [ "develop", "testing", "main" ]
+    paths-ignore:
+      - "**/*.md"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DATABASE_URL: ${{secrets.DATABASE_URL}}
+
 jobs:
-  ci:
+  pre-requisites:
+    name: Pre-requisites (setup & install)
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,12 +41,175 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+  checks:
+    name: Checks (lint & typecheck)
+    needs: pre-requisites
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies (uses cache)
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma
+        run: pnpm prisma generate
+
       - name: Linter
         run: pnpm run lint
 
       - name: TypeScript typecheck
         run: pnpm run typecheck
 
-      - name: Build (only testing/main)
-        if: github.ref == 'refs/heads/testing' || github.ref == 'refs/heads/main'
+  ui-tests:
+    name: UI Tests
+    needs: checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies (uses cache)
+        run: pnpm install --frozen-lockfile
+
+      - name: UI tests
+        run: pnpm test:ui
+
+  unit-tests:
+    name: Unit Tests
+    needs: checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies (uses cache)
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+  integration-tests:
+    name: Integration Tests (only push to testing/main)
+    needs: checks
+    if: |
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/testing' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: linklite
+          POSTGRES_PASSWORD: linklite
+          POSTGRES_DB: linklite_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U linklite -d linklite_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies (uses cache)
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma
+        run: pnpm prisma generate
+      
+      - name: Run migrations
+        run: pnpm prisma migrate deploy
+
+      - name: Integration tests
+        run: pnpm test:integration
+
+  build:
+    name: Build (only testing/main)
+    needs: checks
+    if: |
+      (github.event_name == 'push' &&
+       (github.ref == 'refs/heads/testing' || github.ref == 'refs/heads/main')) ||
+      (github.event_name == 'pull_request' &&
+       (github.base_ref == 'testing' || github.base_ref == 'main'))
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies (uses cache)
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma
+        run: pnpm prisma generate
+
+      - name: Build
         run: pnpm run build
