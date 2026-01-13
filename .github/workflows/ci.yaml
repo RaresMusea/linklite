@@ -14,6 +14,9 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DATABASE_URL: ${{secrets.DATABASE_URL}}
+
 jobs:
   pre-requisites:
     name: Pre-requisites (setup & install)
@@ -63,8 +66,6 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma
-        env:
-          DATABASE_URL: "postgresql://user:pass@localhost:5432/db?schema=public" #TODO: Change this later on
         run: pnpm prisma generate
 
       - name: Linter
@@ -170,13 +171,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run migrations
-        env:
-          DATABASE_URL: postgresql://linklite:linklite@localhost:5432/linklite_test?schema=public
         run: pnpm prisma migrate deploy
 
       - name: Integration tests
-        env:
-          DATABASE_URL: postgresql://linklite:linklite@localhost:5432/linklite_test?schema=public
         run: pnpm test:integration
 
   build:

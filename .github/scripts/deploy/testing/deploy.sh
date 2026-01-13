@@ -4,8 +4,10 @@ set -euo pipefail
 APP_ENV="testing"
 AWS_REGION="eu-north-1"
 APP_DIR="/opt/linklite"
-IMAGE="ghcr.io/raresmusea/linklite:latest-testing"
 GHCR_USER="raresmusea"
+
+: "${IMAGE_TAG:?IMAGE_TAG is required}"
+IMAGE="ghcr.io/${GHCR_USER}/linklite:${IMAGE_TAG}"
 
 cd "$APP_DIR"
 
@@ -57,7 +59,7 @@ services:
     env_file:
       - .env
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       db:
         condition: service_healthy
@@ -69,6 +71,9 @@ volumes:
 EOF
 
 echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+echo "Deploying image: $IMAGE"
+
 docker pull "$IMAGE"
 
 sudo docker-compose -f docker-compose.testing.yml up -d db

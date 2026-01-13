@@ -31,8 +31,15 @@ jobs:
       - name: Compute tags
         id: tags
         run: |
-          chmod +x .github/scripts/publish/compute_oci_tag.sh
-          .github/scripts/publish/compute_oci_tag.sh >> "$GITHUB_OUTPUT"
+          REPO="ghcr.io/${{github.repository_owner}}/linklite"
+          SHA="${{github.sha}}"
+          BRANCH="${{github.ref_name}}"
+          
+          TAG_SHA="${REPO}:${BRANCH}-${SHA}"
+          TAG_BRANCH="${REPO}:${BRANCH}"
+          
+          echo "tags=${TAG_SHA},${TAG_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "tag_sha=${TAG_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Build & push (multi-arch)
         uses: docker/build-push-action@v6
@@ -42,4 +49,4 @@ jobs:
           platforms: linux/arm64,linux/amd64
           tags: ${{ steps.tags.outputs.tags }}
           build-args: |
-            DATABASE_URL=postgresql://user:pass@localhost:5432/db?schema=public
+            DATABASE_URL=${{secrets.DATABASE_URL}}
