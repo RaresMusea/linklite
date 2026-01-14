@@ -26,14 +26,3 @@ export function generateSlug(length = 6): string {
 
     return slug;
 }
-
-export function generateSlug(length = 6): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let slug: string = '';
-
-    for (let i = 0; i < length; i++) {
-        slug += chars[Math.floor(Math.random() * chars.length)];
-    }
-
-    return slug;
-}
