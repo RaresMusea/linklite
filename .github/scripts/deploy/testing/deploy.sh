@@ -5,6 +5,7 @@ APP_ENV="testing"
 AWS_REGION="eu-north-1"
 APP_DIR="/opt/linklite"
 GHCR_USER="raresmusea"
+URL="https://staging.linklite.dev/api/app/healthz"
 
 : "${IMAGE_TAG:?IMAGE_TAG is required}"
 IMAGE="ghcr.io/${GHCR_USER}/linklite:${IMAGE_TAG}"
@@ -85,3 +86,21 @@ sudo docker-compose -f docker-compose.testing.yml up -d db
 sudo docker-compose -f docker-compose.testing.yml run --rm app pnpm prisma migrate deploy
 
 sudo docker-compose -f docker-compose.testing.yml up -d --no-deps --force-recreate app
+
+echo "Waiting for app to respond: $URL"
+for i in {1..30}; do
+  if curl -fsS --max-time 3 "$URL" > /dev/null; then
+    echo "Smoke check OK"
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "Smoke check FAILED"
+echo "Last attempt details:"
+curl -v --max-time 10 "$URL" || true
+
+echo "Fetching health payload (if reachable):"
+curl -sS --max-time 10 "$URL" || true
+
+exit 1
