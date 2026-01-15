@@ -17,3 +17,20 @@ export async function createLink(input: CreateLinkInput): Promise<CreatedLink> {
     });
 }
 
+export async function increaseClickCount(slug: string): Promise<number> {
+    const result: { clicks: number } = await prisma.link.update({
+        where: {
+            slug: slug,
+        },
+        data: {
+            clicks: {
+                increment: 1,
+            },
+        },
+        select: {
+            clicks: true,
+        },
+    });
+
+    return result.clicks;
+}
