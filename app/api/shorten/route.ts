@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { LinkCreationSchema } from '@/validation/LinkCreationSchema';
 import { CreatedLink } from '@/dal/links/links.types';
 import { createLink } from '@/dal/links/links.repo';
+import { getOrigin } from '@/lib/origin';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     const json: unknown = await request.json().catch(() => null);
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ error: 'Could not generate a unique slug. Please try again.' }, { status: 500 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+    const baseUrl = getOrigin(request) ?? 'http://localhost:3000';
 
     return NextResponse.json(
         {
