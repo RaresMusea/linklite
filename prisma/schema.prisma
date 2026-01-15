@@ -11,6 +11,7 @@ model Link {
   id        String   @id @default(cuid())
   slug      String   @unique
   targetUrl String   @map("target_url")
+  clicks    Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
   ownerId   String?  @map("owner_id") // WILL BE USED LATER ON
 }
