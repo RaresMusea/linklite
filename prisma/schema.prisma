@@ -14,4 +14,19 @@ model Link {
   clicks    Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
   ownerId   String?  @map("owner_id") // WILL BE USED LATER ON
+
+  domainId String?
+  domain   Domain? @relation(fields: [domainId], references: [id])
+}
+
+model Domain {
+  id             String    @id @default(cuid())
+  hostname       String    @unique
+  firstSeenAt    DateTime  @map("first_seen_at") @default(now())
+  whoisCreatedAt DateTime? @map("whois_created_at")
+  whoisCheckedAt DateTime? @db.Date @map("whois_checked_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  links Link[]
 }
