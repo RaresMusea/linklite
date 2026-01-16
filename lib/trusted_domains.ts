@@ -1,0 +1,193 @@
+export const TRUSTED_DOMAINS = new Set<string>([
+    // Search / Big Tech
+    'google.com',
+    'bing.com',
+    'yahoo.com',
+    'duckduckgo.com',
+    'apple.com',
+    'microsoft.com',
+    'amazon.com',
+    'amazonaws.com',
+
+    // Social
+    'facebook.com',
+    'instagram.com',
+    'messenger.com',
+    'whatsapp.com',
+    'twitter.com',
+    'x.com',
+    'linkedin.com',
+    'tiktok.com',
+    'snapchat.com',
+    'reddit.com',
+    'pinterest.com',
+    'discord.com',
+    'discord.gg',
+    'threads.net',
+
+    // Video / Media
+    'youtube.com',
+    'youtu.be',
+    'vimeo.com',
+    'twitch.tv',
+    'netflix.com',
+    'spotify.com',
+    'soundcloud.com',
+    'hulu.com',
+    'primevideo.com',
+
+    // Knowledge / Docs
+    'wikipedia.org',
+    'wikimedia.org',
+    'britannica.com',
+    'medium.com',
+    'substack.com',
+
+    // Dev / Engineering
+    'github.com',
+    'githubusercontent.com',
+    'gitlab.com',
+    'bitbucket.org',
+    'npmjs.com',
+    'nodejs.org',
+    'deno.com',
+    'bun.sh',
+    'python.org',
+    'pypi.org',
+    'rust-lang.org',
+    'golang.org',
+    'java.com',
+    'oracle.com',
+    'stackoverflow.com',
+    'stackexchange.com',
+    'superuser.com',
+    'serverfault.com',
+    'vercel.com',
+    'netlify.com',
+    'cloudflare.com',
+    'digitalocean.com',
+    'heroku.com',
+    'render.com',
+    'railway.app',
+
+    // Docs / SaaS
+    'notion.so',
+    'figma.com',
+    'slack.com',
+    'zoom.us',
+    'asana.com',
+    'trello.com',
+    'atlassian.com',
+    'jira.com',
+    'confluence.com',
+    'linear.app',
+    'clickup.com',
+    'airtable.com',
+    'coda.io',
+    'monday.com',
+
+    // Auth / Infra
+    'auth0.com',
+    'okta.com',
+    'firebase.google.com',
+    'supabase.com',
+    'clerk.com',
+    'sentry.io',
+    'datadoghq.com',
+    'newrelic.com',
+
+    // Payments / Finance
+    'paypal.com',
+    'stripe.com',
+    'checkout.com',
+    'wise.com',
+    'revolut.com',
+    'squareup.com',
+    'adyen.com',
+    'klarna.com',
+
+    // Ecommerce
+    'ebay.com',
+    'etsy.com',
+    'shopify.com',
+    'shop.app',
+    'aliexpress.com',
+    'alibaba.com',
+    'walmart.com',
+    'target.com',
+    'bestbuy.com',
+
+    // Productivity / Email
+    'gmail.com',
+    'outlook.com',
+    'hotmail.com',
+    'live.com',
+    'proton.me',
+    'protonmail.com',
+    'zoho.com',
+
+    // Cloud storage
+    'drive.google.com',
+    'dropbox.com',
+    'box.com',
+    'icloud.com',
+    'mega.nz',
+
+    // News
+    'bbc.com',
+    'cnn.com',
+    'nytimes.com',
+    'theguardian.com',
+    'reuters.com',
+    'bloomberg.com',
+    'forbes.com',
+    'techcrunch.com',
+    'theverge.com',
+    'wired.com',
+
+    // Education
+    'coursera.org',
+    'udemy.com',
+    'edx.org',
+    'khanacademy.org',
+    'freecodecamp.org',
+
+    // Design / Assets
+    'dribbble.com',
+    'behance.net',
+    'unsplash.com',
+    'pexels.com',
+    'pixabay.com',
+
+    // Maps / Travel
+    'maps.google.com',
+    'openstreetmap.org',
+    'booking.com',
+    'airbnb.com',
+    'expedia.com',
+    'tripadvisor.com',
+
+    // OS / Browsers
+    'mozilla.org',
+    'firefox.com',
+    'chrome.google.com',
+    'opera.com',
+    'brave.com',
+
+    // AI / ML
+    'openai.com',
+    'chatgpt.com',
+    'anthropic.com',
+    'huggingface.co',
+    'replicate.com',
+
+    // Misc trusted
+    'who.int',
+    'europa.eu',
+    'gov.uk',
+    'usa.gov',
+    'data.gov',
+    'archive.org',
+    'ietf.org',
+    'w3.org',
+]);
