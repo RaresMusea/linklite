@@ -43,8 +43,8 @@ describe('Domain repo integration tests', () => {
         });
         expect(domain).toBeDefined();
         expect(domain?.firstSeenAt).toBeInstanceOf(Date);
-        expect(domain?.whoisCreatedAt).toBeNull();
-        expect(domain?.whoisCheckedAt).toBeNull();
+        expect(domain?.registeredAt).toBeNull();
+        expect(domain?.checkedAt).toBeNull();
     });
 
     it('does not update firstSeenAt when domain already exists', async () => {

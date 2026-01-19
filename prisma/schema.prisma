@@ -20,13 +20,23 @@ model Link {
 }
 
 model Domain {
-  id             String    @id @default(cuid())
-  hostname       String    @unique
-  firstSeenAt    DateTime  @default(now()) @map("first_seen_at")
-  whoisCreatedAt DateTime? @map("whois_created_at")
-  whoisCheckedAt DateTime? @map("whois_checked_at") @db.Date
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id       String @id @default(cuid())
+  hostname String @unique
+
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+
+  // Derived, provider-agnostic
+  registeredAt DateTime? @map("registered_at") // domain registration date
+  checkedAt    DateTime? @map("checked_at") // last time we checked registration data
+  source       String?   @map("source") // 'rdap' | 'whois' | 'unknown'
+  status       String?   @map("status") // optional: 'ok' | 'redacted' | 'unsupported' | 'error'
+
+  // RDAP cache (optional but recommended)
+  rdapRaw       Json?     @map("rdap_raw")
+  rdapFetchedAt DateTime? @map("rdap_fetched_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   links Link[]
 }

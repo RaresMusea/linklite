@@ -6,6 +6,12 @@ export type UpsertedDomain = {
     id: string;
     hostname: string;
     firstSeenAt: Date;
-    whoisCreatedAt: Date | null;
-    whoisCheckedAt: Date | null;
+
+    registeredAt: Date | null;
+    checkedAt: Date | null;
+    source: string | null;
+    status: string | null;
+
+    rdapFetchedAt: Date | null;
 };
+

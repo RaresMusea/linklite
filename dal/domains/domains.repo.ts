@@ -12,14 +12,23 @@ type PrismaLike = typeof prisma | Prisma.TransactionClient;
 export async function upsertDomain(input: CreateDomainInput, db: PrismaLike = prisma): Promise<UpsertedDomain> {
     return db.domain.upsert({
         where: { hostname: input.hostname },
-        create: { hostname: input.hostname },
+        create: {
+            hostname: input.hostname,
+        },
         update: {},
         select: {
             id: true,
             hostname: true,
             firstSeenAt: true,
-            whoisCreatedAt: true,
-            whoisCheckedAt: true,
+
+            // provider-agnostic derived fields
+            registeredAt: true,
+            checkedAt: true,
+            source: true,
+            status: true,
+
+            // RDAP cache metadata (optional, but useful)
+            rdapFetchedAt: true,
         },
     });
 }
