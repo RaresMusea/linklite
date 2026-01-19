@@ -29,7 +29,7 @@ model Domain {
   registeredAt DateTime? @map("registered_at") // domain registration date
   checkedAt    DateTime? @map("checked_at") // last time we checked registration data
   source       String?   @map("source") // 'rdap' | 'whois' | 'unknown'
-  status       String?   @map("status") // optional: 'ok' | 'redacted' | 'unsupported' | 'error'
+  status       String?   @map("status")
 
   // RDAP cache (optional but recommended)
   rdapRaw       Json?     @map("rdap_raw")
