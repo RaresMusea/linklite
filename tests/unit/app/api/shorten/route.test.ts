@@ -135,6 +135,6 @@ describe('POST /api/shorten', () => {
         expect(res.status).toBe(500);
 
         const json = await res.json();
-        expect(json.error).toContain('internal error');
+        expect(json.error).toContain('Internal server error');
     });
 });
