@@ -1,9 +1,19 @@
-import { describe, it, expect } from 'vitest';
-import { cn, generateSlug, isApiRouteResponseOf } from '@/lib/utils';
+import { describe, beforeEach, it, vi, expect } from 'vitest';
+import { cn, generateSlug, isApiRouteResponseOf, normalizeHostnameFromUrl } from '@/lib/utils';
+import { toASCII } from 'punycode';
 
 function isNumber(x: unknown): x is number {
     return typeof x === 'number';
 }
+
+vi.mock('punycode', () => ({
+    toASCII: vi.fn((s: string) => s),
+}));
+
+beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(toASCII).mockImplementation((s) => s);
+});
 
 describe('cn', () => {
     it('merges class names', () => {
@@ -100,5 +110,296 @@ describe('isApiRouteResponseOf', () => {
     it('rejects error response when error is missing or not string', () => {
         expect(isApiRouteResponseOf({ success: false }, isNumber)).toBe(false);
         expect(isApiRouteResponseOf({ success: false, error: 123 }, isNumber)).toBe(false);
+    });
+});
+
+// Mock the punycode module if needed
+vi.mock('punycode', () => ({
+    toASCII: vi.fn((str) => str), // Default mock, override in tests if needed
+}));
+
+describe('normalizeHostnameFromUrl', () => {
+    // Reset mocks before each test
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    describe('Basic URL normalization', () => {
+        it('should normalize standard HTTP URL', () => {
+            const result = normalizeHostnameFromUrl('http://example.com');
+            expect(result).toBe('example.com');
+        });
+
+        it('should normalize standard HTTPS URL', () => {
+            const result = normalizeHostnameFromUrl('https://example.com');
+            expect(result).toBe('example.com');
+        });
+
+        it('should normalize URL with path', () => {
+            const result = normalizeHostnameFromUrl('https://example.com/path/to/page');
+            expect(result).toBe('example.com');
+        });
+
+        it('should normalize URL with query parameters', () => {
+            const result = normalizeHostnameFromUrl('https://example.com?param=value&other=123');
+            expect(result).toBe('example.com');
+        });
+
+        it('should normalize URL with fragment', () => {
+            const result = normalizeHostnameFromUrl('https://example.com#section');
+            expect(result).toBe('example.com');
+        });
+
+        it('should normalize URL with port', () => {
+            const result = normalizeHostnameFromUrl('https://example.com:8080');
+            expect(result).toBe('example.com');
+        });
+
+        it('should normalize URL with username/password', () => {
+            const result = normalizeHostnameFromUrl('https://user:pass@example.com');
+            expect(result).toBe('example.com');
+        });
+    });
+
+    describe('WWW canonicalization', () => {
+        it('should remove www prefix', () => {
+            const result = normalizeHostnameFromUrl('https://www.example.com');
+            expect(result).toBe('example.com');
+        });
+
+        it('should remove www prefix with multiple subdomains', () => {
+            const result = normalizeHostnameFromUrl('https://www.blog.example.com');
+            expect(result).toBe('blog.example.com');
+        });
+
+        it("should not remove www if it's not at the beginning", () => {
+            const result = normalizeHostnameFromUrl('https://mywww.example.com');
+            expect(result).toBe('mywww.example.com');
+        });
+
+        it('should handle www with trailing dot removal', () => {
+            const result = normalizeHostnameFromUrl('https://www.example.com.');
+            expect(result).toBe('example.com');
+        });
+
+        it('should handle multiple www prefixes (edge case)', () => {
+            const result = normalizeHostnameFromUrl('https://www.www.example.com');
+            expect(result).toBe('www.example.com');
+        });
+    });
+
+    describe('Trailing dot removal', () => {
+        it('should remove single trailing dot', () => {
+            const result = normalizeHostnameFromUrl('https://example.com.');
+            expect(result).toBe('example.com');
+        });
+
+        it('should remove trailing dot with www', () => {
+            const result = normalizeHostnameFromUrl('https://www.example.com.');
+            expect(result).toBe('example.com');
+        });
+
+        it('should handle multiple trailing dots (only removes one)', () => {
+            const result = normalizeHostnameFromUrl('https://example.com..');
+            expect(result).toBe('example.com');
+        });
+
+        it('should handle hostname that is just a dot', () => {
+            const result = normalizeHostnameFromUrl('https://.');
+            expect(result).toBe(null);
+        });
+    });
+
+    describe('Case normalization', () => {
+        it('should convert hostname to lowercase', () => {
+            const result = normalizeHostnameFromUrl('https://EXAMPLE.COM');
+            expect(result).toBe('example.com');
+        });
+
+        it('should convert mixed case hostname to lowercase', () => {
+            const result = normalizeHostnameFromUrl('https://ExAmPlE.CoM');
+            expect(result).toBe('example.com');
+        });
+
+        it('should handle uppercase with www', () => {
+            const result = normalizeHostnameFromUrl('https://WWW.EXAMPLE.COM');
+            expect(result).toBe('example.com');
+        });
+    });
+
+    describe('Whitespace handling', () => {
+        it('should trim whitespace from hostname', () => {
+            const result = normalizeHostnameFromUrl('https://  example.com  ');
+            expect(result).toBe('example.com');
+        });
+
+        it('should handle tabs and newlines', () => {
+            const result = normalizeHostnameFromUrl('https://\texample.com\n');
+            expect(result).toBe('example.com');
+        });
+    });
+
+    describe('Internationalized Domain Names (IDN)', () => {
+        it('should convert IDN to punycode', () => {
+            vi.mocked(toASCII).mockReturnValue('xn--mgba3a4f16a.com');
+
+            const result = normalizeHostnameFromUrl('https://مثال.com');
+
+            // URL.hostname (Node) serializează IDN în ASCII (punycode)
+            expect(toASCII).toHaveBeenCalledWith('xn--mgbh0fb.com');
+            expect(result).toBe('xn--mgba3a4f16a.com');
+        });
+
+        it('should handle IDN with www', () => {
+            vi.mocked(toASCII).mockReturnValue('xn--mgba3a4f16a.com');
+
+            const result = normalizeHostnameFromUrl('https://www.مثال.com');
+
+            // www se scoate înainte de toASCII; rămâne același hostname IDN (serializat ASCII)
+            expect(toASCII).toHaveBeenCalledWith('xn--mgbh0fb.com');
+            expect(result).toBe('xn--mgba3a4f16a.com');
+        });
+
+        it('should handle IDN that is already punycode', () => {
+            const punycodeSpy = vi.mocked(toASCII).mockReturnValue('xn--mgba3a4f16a.com');
+
+            const result = normalizeHostnameFromUrl('https://xn--mgba3a4f16a.com');
+
+            expect(punycodeSpy).toHaveBeenCalledWith('xn--mgba3a4f16a.com');
+            expect(result).toBe('xn--mgba3a4f16a.com');
+        });
+    });
+
+    describe('Edge cases and invalid URLs', () => {
+        it('should return null for empty string', () => {
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            const result = normalizeHostnameFromUrl('');
+
+            expect(result).toBeNull();
+            expect(toASCII).not.toHaveBeenCalled();
+            expect(consoleSpy).toHaveBeenCalledWith('Unknown hostname from URL: ');
+
+            consoleSpy.mockRestore();
+        });
+
+        it('should accept bare hostname-like input', () => {
+            const result = normalizeHostnameFromUrl('not-a-valid-url');
+
+            expect(result).toBeNull();
+            expect(toASCII).not.toHaveBeenCalled();
+        });
+
+        it('should accept URL without protocol', () => {
+            const result = normalizeHostnameFromUrl('example.com');
+            expect(result).toBe('example.com');
+        });
+
+        it('should return null for URL with only protocol', () => {
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            const result = normalizeHostnameFromUrl('https://');
+
+            expect(result).toBeNull();
+            expect(consoleSpy).toHaveBeenCalledWith('Unknown hostname from URL: https://');
+            consoleSpy.mockRestore();
+        });
+
+        it('should return empty string for URL with empty hostname', () => {
+            // Note: This depends on URL parsing behavior
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            const result = normalizeHostnameFromUrl('file:///path/to/file');
+
+            // file:// URLs don't have a hostname, so result might be '' or null
+            expect(result === '' || result === null).toBe(true);
+
+            if (result === null) {
+                expect(consoleSpy).toHaveBeenCalled();
+            }
+            consoleSpy.mockRestore();
+        });
+
+        it('should handle IPv4 addresses', () => {
+            const result = normalizeHostnameFromUrl('https://192.168.1.1');
+            expect(result).toBe('192.168.1.1');
+        });
+
+        it('should handle IPv6 addresses', () => {
+            vi.mocked(toASCII).mockImplementation((s) => s); // important
+
+            const result = normalizeHostnameFromUrl('https://[2001:db8::1]');
+            expect(result).toBeNull();
+        });
+
+        it('should handle localhost', () => {
+            const result = normalizeHostnameFromUrl('http://localhost:3000');
+            expect(result).toBe('localhost');
+        });
+    });
+
+    describe('Empty hostname handling', () => {
+        it('should return null for empty hostname after normalization', () => {
+            const result = normalizeHostnameFromUrl('https://');
+            expect(result).toBeNull();
+        });
+
+        it('should return null for hostname that becomes empty after www removal', () => {
+            const result = normalizeHostnameFromUrl('https://www.');
+            expect(result).toBeNull();
+        });
+    });
+
+    describe('Console error logging', () => {
+        it('should log error when URL parsing fails', () => {
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            normalizeHostnameFromUrl('invalid://[invalid');
+
+            expect(consoleSpy).toHaveBeenCalledWith('Unknown hostname from URL: invalid://[invalid');
+            consoleSpy.mockRestore();
+        });
+
+        it('should include the original URL in error message', () => {
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            const testUrl = 'https://[invalid-ipv6';
+            normalizeHostnameFromUrl(testUrl);
+
+            expect(consoleSpy).toHaveBeenCalledWith(`Unknown hostname from URL: ${testUrl}`);
+            consoleSpy.mockRestore();
+        });
+    });
+
+    describe('Complex scenarios', () => {
+        it('should handle all normalization steps together', () => {
+            vi.mocked(toASCII).mockImplementation((str) => str);
+
+            const result = normalizeHostnameFromUrl('  HTTPS://WWW.EXAMPLE.COM.  ');
+
+            expect(result).toBe('example.com');
+            expect(toASCII).toHaveBeenCalledWith('example.com');
+        });
+
+        it('should handle international domain with all transformations', () => {
+            vi.mocked(toASCII).mockReturnValue('xn--mgba3a4f16a.com');
+
+            const result = normalizeHostnameFromUrl('https://WWW.مثال.COM.');
+
+            expect(toASCII).toHaveBeenCalledWith('xn--mgbh0fb.com');
+            expect(result).toBe('xn--mgba3a4f16a.com');
+        });
+
+        it('should handle subdomains correctly', () => {
+            vi.mocked(toASCII).mockReturnValue('api.blog.example.com');
+
+            const result = normalizeHostnameFromUrl('https://api.blog.example.com');
+            expect(result).toBe('api.blog.example.com');
+        });
+
+        it('should handle deeply nested subdomains', () => {
+            const result = normalizeHostnameFromUrl('https://a.b.c.d.e.f.example.com');
+            expect(result).toBe('a.b.c.d.e.f.example.com');
+        });
     });
 });

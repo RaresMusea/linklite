@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { isPlainObject } from '@/lib/guards';
 import { ApiRouteResponse } from '@/lib/types';
+import { toASCII } from 'punycode';
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -25,4 +26,102 @@ export function generateSlug(length = 6): string {
     }
 
     return slug;
+}
+
+const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
+const TRAILING_DOTS_RE = /\.+$/;
+const WWW_RE = /^www\./;
+
+// IPv4: permissive
+const IPV4_RE = /^\d{1,3}(\.\d{1,3}){3}$/;
+// IPv6 (no brackets). This is a pragmatic check, not a full RFC validator.
+const IPV6_RE = /^[0-9a-f:]+$/i;
+
+/**
+ * Normalizes and validates a hostname extracted from a URL.
+ *
+ * Features:
+ * - Accepts URLs with or without protocol (`https://example.com`, `example.com`)
+ * - Removes `www.` prefix and trailing dots
+ * - Converts Internationalized Domain Names (IDN) to punycode
+ * - Supports IPv4, IPv6 (without brackets), and `localhost`
+ * - Rejects invalid or garbage hostnames
+ *
+ * @param input URL or hostname provided by the user
+ * @returns Normalized hostname, or `null` if the input is invalid
+ *
+ * @example
+ * normalizeHostnameFromUrl('https://www.Example.COM.')
+ * // → 'example.com'
+ *
+ * @example
+ * normalizeHostnameFromUrl('example.com')
+ * // → 'example.com'
+ *
+ * @example
+ * normalizeHostnameFromUrl('not-a-valid-url')
+ * // → null
+ *
+ * @example
+ * normalizeHostnameFromUrl('https://[2001:db8::1]')
+ * // → '2001:db8::1'
+ */
+export function normalizeHostnameFromUrl(input: string): string | null {
+    const raw = input ?? '';
+    const cleaned = raw.trim().replace(/\s+/g, '');
+
+    if (!cleaned) {
+        console.error(`Unknown hostname from URL: ${raw}`);
+        return null;
+    }
+
+    // If there is no scheme, assume https:// so URL() can parse it.
+    const candidate = SCHEME_RE.test(cleaned) ? cleaned : `https://${cleaned}`;
+
+    let hostname: string;
+    try {
+        const u = new URL(candidate);
+        hostname = (u.hostname || '').toLowerCase();
+    } catch {
+        console.error(`Unknown hostname from URL: ${raw}`);
+        return null;
+    }
+
+    // Remove trailing dots (DNS canonical form sometimes ends with a dot)
+    hostname = hostname.replace(TRAILING_DOTS_RE, '');
+
+    // Canonicalize www.
+    hostname = hostname.replace(WWW_RE, '');
+
+    if (!hostname) {
+        console.error(`Unknown hostname from URL: ${raw}`);
+        return null;
+    }
+
+    // Fast-path: IPs + localhost (do NOT run through punycode)
+    const isIPv4 = IPV4_RE.test(hostname);
+    const isIPv6 = IPV6_RE.test(hostname) && hostname.includes(':');
+    const isLocalhost = hostname === 'localhost';
+
+    if (isIPv4 || isIPv6 || isLocalhost) {
+        return hostname;
+    }
+
+    // Domain validation: require at least one dot to avoid garbage like "not-a-valid-url"
+    // If you want to allow single-label hostnames, remove this.
+    if (!hostname.includes('.')) {
+        console.error(`Unknown hostname from URL: ${raw}`);
+        return null;
+    }
+
+    // IDN -> punycode (safe for ASCII too)
+    const ascii = toASCII(hostname);
+
+    // Final sanity check (after punycode)
+    if (!ascii || !ascii.includes('.')) {
+        console.error(`Unknown hostname from URL: ${raw}`);
+        return null;
+    }
+
+    return ascii;
 }

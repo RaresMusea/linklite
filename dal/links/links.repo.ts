@@ -1,19 +1,35 @@
 import { CreatedLink, CreateLinkInput } from '@/dal/links/links.types';
 import { prisma } from '@/lib/prisma';
+import { normalizeHostnameFromUrl } from '@/lib/utils';
+import { InvalidHostnameError } from '@/lib/errors/InvalidHostnameError';
+import { upsertDomain } from '@/dal/domains/domains.repo';
 
 export async function createLink(input: CreateLinkInput): Promise<CreatedLink> {
-    return prisma.link.create({
-        data: {
-            slug: input.slug,
-            targetUrl: input.targetUrl,
-            ownerId: input.ownerId,
-        },
-        select: {
-            id: true,
-            slug: true,
-            targetUrl: true,
-            ownerId: true,
-        },
+    const hostname = normalizeHostnameFromUrl(input.targetUrl);
+
+    if (!hostname) {
+        throw new InvalidHostnameError();
+    }
+
+    return prisma.$transaction(async (tx) => {
+        const domain = await upsertDomain({ hostname }, tx);
+
+        console.log("CREATED DOMAIN", domain);
+
+        return tx.link.create({
+            data: {
+                slug: input.slug,
+                targetUrl: input.targetUrl,
+                ownerId: input.ownerId,
+                domainId: domain.id,
+            },
+            select: {
+                id: true,
+                slug: true,
+                targetUrl: true,
+                ownerId: true,
+            },
+        });
     });
 }
 

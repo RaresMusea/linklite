@@ -31,6 +31,9 @@ export default defineConfig({
                     name: 'integration',
                     environment: 'node',
                     include: ['tests/integration/**/*.test.ts'],
+                    pool: 'forks',
+                    fileParallelism: false,
+                    maxConcurrency: 1,
                 },
             }),
             defineProject({
