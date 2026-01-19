@@ -125,3 +125,15 @@ export function normalizeHostnameFromUrl(input: string): string | null {
 
     return ascii;
 }
+
+export function getTld(hostname: string): string | null {
+    // IPs & localhost → no TLD
+    if (hostname === 'localhost') return null;
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return null;
+    if (/^[0-9a-f:]+$/i.test(hostname)) return null;
+
+    const parts = hostname.split('.');
+    if (parts.length < 2) return null;
+
+    return parts[parts.length - 1];
+}

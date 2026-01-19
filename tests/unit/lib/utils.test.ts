@@ -1,5 +1,5 @@
 import { describe, beforeEach, it, vi, expect } from 'vitest';
-import { cn, generateSlug, isApiRouteResponseOf, normalizeHostnameFromUrl } from '@/lib/utils';
+import { cn, generateSlug, getTld, isApiRouteResponseOf, normalizeHostnameFromUrl } from '@/lib/utils';
 import { toASCII } from 'punycode';
 
 function isNumber(x: unknown): x is number {
@@ -401,5 +401,87 @@ describe('normalizeHostnameFromUrl', () => {
             const result = normalizeHostnameFromUrl('https://a.b.c.d.e.f.example.com');
             expect(result).toBe('a.b.c.d.e.f.example.com');
         });
+    });
+});
+
+describe('Top level domain (TLD) retrieval', () => {
+    it('returns TLD for simple domain', () => {
+        expect(getTld('example.com')).toBe('com');
+    });
+
+    it('returns TLD for domain with subdomain', () => {
+        expect(getTld('www.example.com')).toBe('com');
+        expect(getTld('blog.example.com')).toBe('com');
+        expect(getTld('sub.sub.example.com')).toBe('com');
+    });
+
+    it('returns TLD for multi-level TLDs', () => {
+        expect(getTld('example.co.uk')).toBe('uk');
+        expect(getTld('example.com.au')).toBe('au');
+        expect(getTld('example.gov.uk')).toBe('uk');
+        expect(getTld('example.ac.uk')).toBe('uk');
+    });
+
+    it('returns TLD for country-code TLDs', () => {
+        expect(getTld('example.ro')).toBe('ro');
+        expect(getTld('example.de')).toBe('de');
+        expect(getTld('example.fr')).toBe('fr');
+        expect(getTld('example.jp')).toBe('jp');
+    });
+
+    it('returns TLD for new gTLDs', () => {
+        expect(getTld('example.xyz')).toBe('xyz');
+        expect(getTld('example.app')).toBe('app');
+        expect(getTld('example.dev')).toBe('dev');
+        expect(getTld('example.io')).toBe('io');
+        expect(getTld('example.ai')).toBe('ai');
+    });
+
+    it('returns TLD for domains with multiple dots', () => {
+        expect(getTld('a.b.c.d.example.com')).toBe('com');
+        expect(getTld('deeply.nested.sub.domain.co.uk')).toBe('uk');
+    });
+
+    it('returns last part for single-component strings', () => {
+        expect(getTld('localhost')).toBeNull();
+        expect(getTld('local')).toBeNull();
+        expect(getTld('test')).toBeNull();
+    });
+
+    it('returns empty string for empty input', () => {
+        expect(getTld('')).toBeNull();
+    });
+
+    it('returns correct TLD for domains ending with dot', () => {
+        expect(getTld('example.com.')).toBe('');
+        expect(getTld('www.example.co.uk.')).toBe('');
+    });
+
+    it('returns TLD for internationalized domain names', () => {
+        expect(getTld('münchen.de')).toBe('de');
+        expect(getTld('例.jp')).toBe('jp');
+        expect(getTld('mañana.com')).toBe('com');
+    });
+
+    it('returns TLD for punycode domains', () => {
+        expect(getTld('xn--mnchen-3ya.de')).toBe('de');
+        expect(getTld('xn--fsqu00a.xn--3e0b707e')).toBe('xn--3e0b707e'); // 한국.한국
+    });
+
+    it('handles mixed case domain names', () => {
+        expect(getTld('Example.COM')).toBe('COM');
+        expect(getTld('WWW.EXAMPLE.COM')).toBe('COM');
+        expect(getTld('Example.Co.UK')).toBe('UK');
+    });
+
+    it('returns TLD for IP addresses (though not typical usage)', () => {
+        expect(getTld('192.168.1.1')).toBeNull();
+        expect(getTld('127.0.0.1')).toBeNull();
+    });
+
+    it('returns last component for dot-only strings', () => {
+        expect(getTld('.')).toBe('');
+        expect(getTld('..')).toBe('');
+        expect(getTld('...')).toBe('');
     });
 });
