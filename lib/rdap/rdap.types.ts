@@ -14,6 +14,10 @@ export type RdapLike = {
     events?: unknown;
 };
 
+export type FetchRdapInfoResponse =
+    | { ok: true; status: number; json: unknown }
+    | { ok: false; status: number; error?: string };
+
 export function asRdapEvents(json: unknown): RdapEvent[] | null {
     if (!isPlainObject(json) || !hasArray(json, 'events')) return null;
 
