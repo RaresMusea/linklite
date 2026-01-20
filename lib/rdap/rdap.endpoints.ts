@@ -75,3 +75,19 @@ export async function fetchRdapJson(url: string, timeoutMs = 8000): Promise<Fetc
         clearTimeout(t);
     }
 }
+
+export function isRedactedRegistration(rdapJson: unknown): boolean {
+    const events = asRdapEvents(rdapJson);
+    if (!events) return false;
+
+    const reg = events.find(
+        (e) =>
+            String(e.eventAction ?? '')
+                .toLowerCase()
+                .trim() === 'registration'
+    );
+
+    if (!reg) return false;
+
+    return reg.eventDate === null || reg.eventDate === undefined || reg.eventDate === '';
+}

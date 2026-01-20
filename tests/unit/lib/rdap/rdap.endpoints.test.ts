@@ -1,6 +1,6 @@
 import { describe, beforeEach, afterEach, it, vi, expect, Mock } from 'vitest';
 import { getTld } from '@/lib/utils';
-import { extractRegistrationDate, fetchRdapJson, getRdapUrl } from '@/lib/rdap/rdap.endpoints';
+import { extractRegistrationDate, fetchRdapJson, getRdapUrl, isRedactedRegistration } from '@/lib/rdap/rdap.endpoints';
 
 vi.mock('@/lib/utils', () => ({
     getTld: vi.fn(),
@@ -755,6 +755,268 @@ describe('fetchRdapJson', () => {
                 expect(mockAbort).toHaveBeenCalled();
                 setTimeoutSpy.mockRestore();
             });
+        });
+    });
+});
+
+describe('RDAP Redacted registration check tests', () => {
+    it('should return true when registration event has null eventDate', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: 'registration', eventDate: null },
+                { eventAction: 'last changed', eventDate: '2023-01-15T10:30:00Z' },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(true);
+    });
+
+    it('should return true when registration event has undefined eventDate', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: 'registration', eventDate: undefined },
+                { eventAction: 'expiration', eventDate: '2024-01-15T10:30:00Z' },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(true);
+    });
+
+    it('should return true when registration event has empty string eventDate', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: 'registration', eventDate: '' },
+                { eventAction: 'creation', eventDate: '2023-01-15T10:30:00Z' },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(true);
+    });
+
+    it('should return false when registration event has valid eventDate', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: 'registration', eventDate: '2023-01-15T10:30:00Z' },
+                { eventAction: 'expiration', eventDate: '2024-01-15T10:30:00Z' },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(false);
+    });
+
+    it('should return false when no registration event found', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: 'last changed', eventDate: '2023-01-15T10:30:00Z' },
+                { eventAction: 'expiration', eventDate: '2024-01-15T10:30:00Z' },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(false);
+    });
+
+    it('should handle registration event with different casing', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: 'Registration', eventDate: '' },
+                { eventAction: 'REGISTRATION', eventDate: null },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(true);
+    });
+
+    it('should handle registration event with spaces in eventAction', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: '  registration  ', eventDate: undefined },
+                { eventAction: 'registration ', eventDate: '' },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(true);
+    });
+
+    it('should return false when events array is empty', () => {
+        const rdapJson = {
+            events: [],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(false);
+    });
+
+    it('should return false for non-object input (asRdapEvents handles this)', () => {
+        expect(isRedactedRegistration(null)).toBe(false);
+        expect(isRedactedRegistration(undefined)).toBe(false);
+        expect(isRedactedRegistration(42)).toBe(false);
+        expect(isRedactedRegistration('string')).toBe(false);
+        expect(isRedactedRegistration(true)).toBe(false);
+        expect(isRedactedRegistration([])).toBe(false);
+    });
+
+    it('should return false when events is not an array (asRdapEvents handles this)', () => {
+        const rdapJson = {
+            events: 'not an array',
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(false);
+    });
+
+    it('should return false when events property is missing (asRdapEvents handles this)', () => {
+        const rdapJson = {
+            otherProperty: 'value',
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(false);
+    });
+
+    it('should handle events array with non-object elements (asRdapEvents converts them)', () => {
+        const rdapJson = {
+            events: [null, undefined, 'string', 42, true, [], {}, { eventAction: 'registration', eventDate: '' }],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(true);
+    });
+
+    it('should handle multiple registration events - first redacted', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: 'registration', eventDate: null },
+                { eventAction: 'registration', eventDate: '2023-01-15T10:30:00Z' },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(true);
+    });
+
+    it('should handle multiple registration events - last redacted', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: 'registration', eventDate: '2023-01-15T10:30:00Z' },
+                { eventAction: 'registration', eventDate: undefined },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(false); // First valid registration is found
+    });
+
+    it('should handle eventAction being null/undefined', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: null, eventDate: null },
+                { eventAction: undefined, eventDate: '' },
+                { eventAction: 'registration', eventDate: undefined },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(true);
+    });
+
+    it('should handle eventAction being non-string', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: 123, eventDate: null },
+                { eventAction: { action: 'registration' }, eventDate: '' },
+                { eventAction: 'registration', eventDate: null },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(true);
+    });
+
+    it('should handle registration event with whitespace-only eventDate', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: 'registration', eventDate: '   ' },
+                { eventAction: 'registration', eventDate: '\t\n' },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(false); // eventDate is not empty string, just whitespace
+    });
+
+    it('should handle registration event with zero eventDate', () => {
+        const rdapJson = {
+            events: [
+                { eventAction: 'registration', eventDate: 0 },
+                { eventAction: 'registration', eventDate: false },
+            ],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(false); // Not null/undefined/empty string
+    });
+
+    it('should handle deeply nested object structures', () => {
+        const rdapJson = {
+            some: { nested: { structure: true } },
+            events: [
+                {
+                    eventAction: 'registration',
+                    eventDate: null,
+                    extra: { data: 'value' },
+                },
+            ],
+            other: [1, 2, 3],
+        };
+
+        const result = isRedactedRegistration(rdapJson);
+        expect(result).toBe(true);
+    });
+
+    it('should return false when registration eventDate is valid string', () => {
+        const validDates = [
+            '2023-01-15T10:30:00Z',
+            '2023-01-15',
+            '2023-01-15T10:30:00+02:00',
+            'Sun Jan 15 2023 12:30:00 GMT+0200',
+            '0', // String zero is not empty
+            'false', // String false is not empty
+        ];
+
+        validDates.forEach((dateStr) => {
+            const rdapJson = {
+                events: [{ eventAction: 'registration', eventDate: dateStr }],
+            };
+
+            const result = isRedactedRegistration(rdapJson);
+            expect(result).toBe(false);
+        });
+    });
+
+    it('should handle case-insensitive eventAction matching', () => {
+        const testCases = [
+            { eventAction: 'registration', expected: true },
+            { eventAction: 'Registration', expected: true },
+            { eventAction: 'REGISTRATION', expected: true },
+            { eventAction: 'ReGiStRaTiOn', expected: true },
+            { eventAction: 'registrations', expected: false },
+            { eventAction: 'registered', expected: false },
+        ];
+
+        testCases.forEach(({ eventAction, expected }) => {
+            const rdapJson = {
+                events: [{ eventAction, eventDate: null }],
+            };
+
+            const result = isRedactedRegistration(rdapJson);
+            expect(result).toBe(expected);
         });
     });
 });
