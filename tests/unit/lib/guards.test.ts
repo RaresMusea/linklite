@@ -15,7 +15,7 @@ describe('isPlainObject', () => {
     it('returns true for plain objects', () => {
         expect(isPlainObject({})).toBe(true);
         expect(isPlainObject({ a: 1 })).toBe(true);
-        expect(isPlainObject(Object.create(null))).toBe(true); // e tot object & non-array
+        expect(isPlainObject(Object.create(null))).toBe(true); //object & non-array
     });
 
     it('returns false for null', () => {
@@ -34,8 +34,8 @@ describe('isPlainObject', () => {
         expect(isPlainObject(undefined)).toBe(false);
     });
 
-    it('returns true for Date (note: Date is object and not array)', () => {
-        expect(isPlainObject(new Date())).toBe(true);
+    it('returns false for Date (note: Date is object and not array)', () => {
+        expect(isPlainObject(new Date())).toBe(false);
     });
 
     it('returns false for functions', () => {

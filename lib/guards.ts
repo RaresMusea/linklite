@@ -1,7 +1,10 @@
 type DataTypeTag = 'string' | 'number' | 'boolean' | 'null' | 'undefined' | 'object' | 'array';
 
 export function isPlainObject(x: unknown): x is Record<string, unknown> {
-    return typeof x === 'object' && x !== null && !Array.isArray(x);
+    if (typeof x !== 'object' || x === null) return false;
+
+    const proto = Object.getPrototypeOf(x);
+    return proto === null || proto === Object.prototype;
 }
 
 export function hasString(
