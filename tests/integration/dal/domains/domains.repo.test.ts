@@ -4,6 +4,7 @@ import { createLink } from '@/dal/links/links.repo';
 import { normalizeHostnameFromUrl } from '@/lib/utils';
 import { RdapDomainParams, RdapStatus } from '@/dal/domains/domains.types';
 import { updateDomainRdap } from '@/dal/domains/domains.repo';
+import { DomainSource, DomainStatus } from '@/generated/prisma/enums';
 
 const mockedUtils = vi.hoisted(() => ({
     normalizeHostnameFromUrl: vi.fn(),
@@ -81,8 +82,6 @@ describe('updateDomainRdap integration tests', () => {
         const domain = await prisma.domain.create({
             data: {
                 hostname: 'example.com',
-                source: null,
-                status: null,
                 registeredAt: null,
                 checkedAt: null,
                 rdapFetchedAt: null,
@@ -176,8 +175,8 @@ describe('updateDomainRdap integration tests', () => {
         const domain = await prisma.domain.create({
             data: {
                 hostname: 'example.com',
-                source: 'whois',
-                status: 'pending',
+                source: DomainSource.WHOIS,
+                status: DomainStatus.OK,
                 registeredAt: new Date('2019-01-01'),
                 checkedAt: new Date('2023-01-01'),
                 rdapFetchedAt: new Date('2023-01-01'),
@@ -199,7 +198,7 @@ describe('updateDomainRdap integration tests', () => {
         // Assert - only registeredAt and status should change
         expect(updatedDomain.registeredAt).toEqual(new Date('2020-01-01'));
         expect(updatedDomain.status).toBe(RdapStatus.MISSING);
-        expect(updatedDomain.source).toBe('whois'); // Should remain unchanged
+        expect(updatedDomain.source).toBe('WHOIS'); // Should remain unchanged
         expect(updatedDomain.checkedAt).toEqual(new Date('2023-01-01')); // Should remain unchanged
         expect(updatedDomain.rdapFetchedAt).toEqual(new Date('2023-01-01')); // Should remain unchanged
         expect(updatedDomain.rdapRaw).toEqual(initialRdapRaw); // Should remain unchanged

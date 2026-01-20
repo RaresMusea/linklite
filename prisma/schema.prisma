@@ -7,6 +7,21 @@ datasource db {
   provider = "postgresql"
 }
 
+enum DomainSource {
+  RDAP
+  WHOIS
+  UNKNOWN
+}
+
+enum DomainStatus {
+  OK
+  MISSING
+  REDACTED
+  ERROR
+  UNSUPPORTED
+  UNKNOWN
+}
+
 model Link {
   id        String   @id @default(cuid())
   slug      String   @unique
@@ -26,14 +41,21 @@ model Domain {
   firstSeenAt DateTime @default(now()) @map("first_seen_at")
 
   // Derived, provider-agnostic
-  registeredAt DateTime? @map("registered_at") // domain registration date
-  checkedAt    DateTime? @map("checked_at") // last time we checked registration data
-  source       String?   @map("source") // 'rdap' | 'whois' | 'unknown'
-  status       String?   @map("status")
+  registeredAt DateTime?    @map("registered_at") // domain registration date
+  checkedAt    DateTime?    @map("checked_at") // last time we checked registration data
+  source       DomainSource @default(UNKNOWN) @map("source")
+  status       DomainStatus @default(UNKNOWN) @map("status")
 
-  // RDAP cache (optional but recommended)
+  // RDAP cache
   rdapRaw       Json?     @map("rdap_raw")
   rdapFetchedAt DateTime? @map("rdap_fetched_at")
+
+  // WHOIS cache
+  whoisRaw       String?     @map("whois_raw")
+  whoisFetchedAt DateTime? @map("whois_fetched_at")
+
+  rdapFetchLockedUntil DateTime? @map("rdap_fetch_locked_until")
+  whoisFetchLockedUntil DateTime? @map("whois_fetch_locked_until")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
