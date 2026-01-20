@@ -1,8 +1,8 @@
 import { describe, beforeEach, afterEach, it, vi, expect, Mock } from 'vitest';
 import { getRegistrableDomain } from '@/lib/utils';
 import { extractRegistrationDate, fetchRdapJson, getRdapUrl, isRedactedRegistration } from '@/lib/rdap/rdap.endpoints';
-import { RdapStatus } from '@/dal/domains/domains.types';
 import { getRdapInfo } from '@/dal/domains/domains.service';
+import { RdapStatus } from '@/lib/rdap/rdap.types';
 
 // Mock all dependencies
 vi.mock('@/lib/utils', () => ({

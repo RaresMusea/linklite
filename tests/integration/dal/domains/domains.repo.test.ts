@@ -2,9 +2,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { prisma } from '@/lib/prisma';
 import { createLink } from '@/dal/links/links.repo';
 import { normalizeHostnameFromUrl } from '@/lib/utils';
-import { RdapDomainParams, RdapStatus } from '@/dal/domains/domains.types';
 import { updateDomainRdap } from '@/dal/domains/domains.repo';
 import { DomainSource, DomainStatus } from '@/generated/prisma/enums';
+import { RdapDomainParams, RdapStatus } from '@/lib/rdap/rdap.types';
 
 const mockedUtils = vi.hoisted(() => ({
     normalizeHostnameFromUrl: vi.fn(),

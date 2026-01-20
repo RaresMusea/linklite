@@ -1,5 +1,3 @@
-import { Prisma } from '@/generated/prisma/client';
-
 export type CreateDomainInput = {
     hostname: string;
 };
@@ -15,22 +13,4 @@ export type UpsertedDomain = {
     status: string | null;
 
     rdapFetchedAt: Date | null;
-};
-
-export enum RdapStatus {
-    OK = 'OK',
-    MISSING = 'MISSING',
-    REDACTED = 'REDACTED',
-    UNSUPPORTED = 'UNSUPPORTED',
-    ERROR = 'ERROR',
-}
-
-export type RdapDomainParams = {
-    registeredAt: Date | null;
-    status: RdapStatus;
-
-    rdapRaw?: Prisma.InputJsonValue;
-    rdapFetchedAt?: Date;
-    checkedAt?: Date;
-    source?: 'RDAP';
 };

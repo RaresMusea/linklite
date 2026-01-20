@@ -1,4 +1,5 @@
 import { hasArray, isPlainObject } from '@/lib/guards';
+import { Prisma } from '@/generated/prisma/client';
 
 export type RdapProvider = {
     baseUrl: string;
@@ -10,8 +11,22 @@ export type RdapEvent = {
     eventDate?: unknown;
 };
 
-export type RdapLike = {
-    events?: unknown;
+export enum RdapStatus {
+    OK = 'OK',
+    MISSING = 'MISSING',
+    REDACTED = 'REDACTED',
+    UNSUPPORTED = 'UNSUPPORTED',
+    ERROR = 'ERROR',
+}
+
+export type RdapDomainParams = {
+    registeredAt: Date | null;
+    status: RdapStatus;
+
+    rdapRaw?: Prisma.InputJsonValue;
+    rdapFetchedAt?: Date;
+    checkedAt?: Date;
+    source?: 'RDAP';
 };
 
 export type FetchRdapInfoResponse =
