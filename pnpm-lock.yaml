@@ -68,6 +68,9 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@4.1.18)
+      tldts:
+        specifier: ^7.0.19
+        version: 7.0.19
       zod:
         specifier: ^4.1.13
         version: 4.1.13

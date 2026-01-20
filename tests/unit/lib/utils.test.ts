@@ -1,5 +1,12 @@
 import { describe, beforeEach, it, vi, expect } from 'vitest';
-import { cn, generateSlug, getTld, isApiRouteResponseOf, normalizeHostnameFromUrl } from '@/lib/utils';
+import {
+    cn,
+    generateSlug,
+    getRegistrableDomain,
+    getTld,
+    isApiRouteResponseOf,
+    normalizeHostnameFromUrl,
+} from '@/lib/utils';
 import { toASCII } from 'punycode';
 
 function isNumber(x: unknown): x is number {
@@ -245,7 +252,6 @@ describe('normalizeHostnameFromUrl', () => {
 
             const result = normalizeHostnameFromUrl('https://مثال.com');
 
-            // URL.hostname (Node) serializează IDN în ASCII (punycode)
             expect(toASCII).toHaveBeenCalledWith('xn--mgbh0fb.com');
             expect(result).toBe('xn--mgba3a4f16a.com');
         });
@@ -255,7 +261,6 @@ describe('normalizeHostnameFromUrl', () => {
 
             const result = normalizeHostnameFromUrl('https://www.مثال.com');
 
-            // www se scoate înainte de toASCII; rămâne același hostname IDN (serializat ASCII)
             expect(toASCII).toHaveBeenCalledWith('xn--mgbh0fb.com');
             expect(result).toBe('xn--mgba3a4f16a.com');
         });
@@ -483,5 +488,124 @@ describe('Top level domain (TLD) retrieval', () => {
         expect(getTld('.')).toBe('');
         expect(getTld('..')).toBe('');
         expect(getTld('...')).toBe('');
+    });
+});
+
+describe('Registrable domain retrieval', () => {
+    it('returns same domain for simple two-part domain', () => {
+        expect(getRegistrableDomain('example.com')).toBe('example.com');
+        expect(getRegistrableDomain('google.com')).toBe('google.com');
+        expect(getRegistrableDomain('test.ro')).toBe('test.ro');
+    });
+
+    it('returns same domain for single-part domain', () => {
+        expect(getRegistrableDomain('localhost')).toBeNull();
+        expect(getRegistrableDomain('local')).toBeNull();
+        expect(getRegistrableDomain('example')).toBeNull();
+    });
+
+    it('returns registrable domain for domains with subdomains', () => {
+        expect(getRegistrableDomain('www.example.com')).toBe('example.com');
+        expect(getRegistrableDomain('blog.example.com')).toBe('example.com');
+        expect(getRegistrableDomain('shop.test.example.com')).toBe('example.com');
+        expect(getRegistrableDomain('api.v1.service.example.com')).toBe('example.com');
+    });
+
+    it('handles multi-level TLDs correctly', () => {
+        expect(getRegistrableDomain('example.co.uk')).toBe('example.co.uk');
+        expect(getRegistrableDomain('www.example.co.uk')).toBe('example.co.uk');
+        expect(getRegistrableDomain('blog.example.co.uk')).toBe('example.co.uk');
+        expect(getRegistrableDomain('deep.nested.example.co.uk')).toBe('example.co.uk');
+    });
+
+    it('handles other multi-level TLDs', () => {
+        expect(getRegistrableDomain('example.com.au')).toBe('example.com.au');
+        expect(getRegistrableDomain('www.example.com.au')).toBe('example.com.au');
+        expect(getRegistrableDomain('example.gov.uk')).toBe('example.gov.uk');
+        expect(getRegistrableDomain('example.ac.uk')).toBe('example.ac.uk');
+        expect(getRegistrableDomain('example.org.uk')).toBe('example.org.uk');
+    });
+
+    it('handles complex multi-level TLD scenarios', () => {
+        // 3-level TLD
+        expect(getRegistrableDomain('example.act.edu.au')).toBe('example.act.edu.au');
+        expect(getRegistrableDomain('www.example.act.edu.au')).toBe('example.act.edu.au');
+        expect(getRegistrableDomain('a.b.c.d.e.f.g.example.co.uk')).toBe('example.co.uk');
+    });
+
+    it('handles internationalized domain names', () => {
+        expect(getRegistrableDomain('münchen.de')).toBe('münchen.de');
+        expect(getRegistrableDomain('www.münchen.de')).toBe('münchen.de');
+        expect(getRegistrableDomain('例.jp')).toBe('例.jp');
+        expect(getRegistrableDomain('www.例.jp')).toBe('例.jp');
+    });
+
+    it('handles punycode domains', () => {
+        expect(getRegistrableDomain('xn--mnchen-3ya.de')).toBe('xn--mnchen-3ya.de');
+        expect(getRegistrableDomain('www.xn--mnchen-3ya.de')).toBe('xn--mnchen-3ya.de');
+    });
+
+    it('handles empty string', () => {
+        expect(getRegistrableDomain('')).toBeNull();
+    });
+
+    it('handles string ending with dot', () => {
+        expect(getRegistrableDomain('example.com.')).toBe('example.com');
+        expect(getRegistrableDomain('www.example.com.')).toBe('example.com');
+        expect(getRegistrableDomain('example.co.uk.')).toBe('example.co.uk');
+    });
+
+    it('handles multiple consecutive dots', () => {
+        expect(getRegistrableDomain('example..com')).toBeNull();
+        expect(getRegistrableDomain('www..example..com')).toBeNull();
+        expect(getRegistrableDomain('...')).toBeNull();
+    });
+
+    it('handles single dot', () => {
+        expect(getRegistrableDomain('.')).toBeNull();
+    });
+
+    it('preserves case of input', () => {
+        expect(getRegistrableDomain('Example.COM')).toBe('example.com');
+        expect(getRegistrableDomain('WWW.Example.COM')).toBe('example.com');
+        expect(getRegistrableDomain('Blog.Example.Co.UK')).toBe('example.co.uk');
+    });
+
+    it('handles hostnames with ports', () => {
+        expect(getRegistrableDomain('example.com:8080')).toBe('example.com');
+        expect(getRegistrableDomain('localhost:3000')).toBeNull();
+        expect(getRegistrableDomain('www.example.com:443')).toBe('example.com');
+    });
+
+    // IP addresses
+    it('handles IP addresses', () => {
+        expect(getRegistrableDomain('192.168.1.1')).toBeNull();
+        expect(getRegistrableDomain('127.0.0.1')).toBeNull();
+        expect(getRegistrableDomain('8.8.8.8')).toBeNull();
+    });
+
+    it('handles domains with hyphens', () => {
+        expect(getRegistrableDomain('example-test.com')).toBe('example-test.com');
+        expect(getRegistrableDomain('www.example-test.com')).toBe('example-test.com');
+        expect(getRegistrableDomain('test-site.example.co.uk')).toBe('example.co.uk');
+    });
+
+    it('handles domains with numbers', () => {
+        expect(getRegistrableDomain('123.com')).toBe('123.com');
+        expect(getRegistrableDomain('example123.com')).toBe('example123.com');
+        expect(getRegistrableDomain('123.456.com')).toBe('456.com');
+    });
+
+    it('returns last two parts when exactly 3 parts', () => {
+        expect(getRegistrableDomain('a.b.c')).toBe('b.c');
+        expect(getRegistrableDomain('one.two.three')).toBe('two.three');
+    });
+
+    it('returns entire string when exactly 2 parts', () => {
+        expect(getRegistrableDomain('part1.part2')).toBe('part1.part2');
+    });
+
+    it('returns entire string when 1 part', () => {
+        expect(getRegistrableDomain('single')).toBeNull();
     });
 });
