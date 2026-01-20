@@ -381,7 +381,7 @@ describe('fetchRdapJson', () => {
         vi.restoreAllMocks();
     });
 
-    describe('fetchRdapJson', () => {
+    describe('fetchRdapJson tests', () => {
         const originalFetch = global.fetch;
 
         beforeEach(() => {
