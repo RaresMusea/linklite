@@ -1,11 +1,10 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { extractErrorCode, extractErrorMessage } from '@/lib/errors/utils';
+import { extractErrorMessage } from '@/lib/errors/utils';
 import { FetchWhoisInfoResponse } from '@/lib/whois/whois.types';
 import { parseDDMonYYYY } from '@/lib/dates';
 
 const execFileAsync = promisify(execFile);
-
 
 const CREATION_DATE_REGEXES: RegExp[] = [
     /^\s*Creation Date\s*:\s*(.+)$/im,
@@ -47,14 +46,14 @@ export async function fetchWhoisTextViaCli(
         });
 
         const text = `${stdout ?? ''}\n${stderr ?? ''}`.trim();
-        if (!text) return { ok: false, error: 'Empty WHOIS output' };
+        if (!text) return { ok: false, error: 'Empty WHOIS output', status: 404 };
 
-        return { ok: true, text };
+        return { ok: true, text, status: 200 };
     } catch (err: unknown) {
         return {
             ok: false,
             error: extractErrorMessage(err),
-            code: extractErrorCode(err),
+            status: 500,
         };
     }
 }

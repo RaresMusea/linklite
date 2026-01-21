@@ -1,8 +1,14 @@
 import { getRegistrableDomain } from '@/lib/utils';
-import { extractRegistrationDate, fetchRdapJson, getRdapUrl, isRedactedRegistration } from '@/lib/rdap/rdap.endpoints';
+import {
+    extractRegistrationDate,
+    fetchRdapJson,
+    getRdapUrl,
+    isRedactedRdapRegistration,
+} from '@/lib/rdap/rdap.endpoints';
 import { FetchRdapInfoResponse, RdapDomainParams, RdapStatus } from '@/lib/rdap/rdap.types';
 import { Prisma } from '@/generated/prisma/client';
-import { WhoisDomainParams, WhoisStatus } from '@/lib/whois/whois.types';
+import { FetchWhoisInfoResponse, WhoisDomainParams, WhoisStatus } from '@/lib/whois/whois.types';
+import { extractWhoisRegistrationDate, fetchWhoisTextViaCli, isWhoisRedacted } from '@/lib/whois/whois.endpoints';
 
 export async function getRdapInfo(host: string): Promise<RdapDomainParams> {
     const now = new Date();
@@ -34,7 +40,7 @@ export async function getRdapInfo(host: string): Promise<RdapDomainParams> {
 
     if (registeredAt) {
         status = RdapStatus.OK;
-    } else if (isRedactedRegistration(fetched.json)) {
+    } else if (isRedactedRdapRegistration(fetched.json)) {
         status = RdapStatus.REDACTED;
     }
 
@@ -44,17 +50,39 @@ export async function getRdapInfo(host: string): Promise<RdapDomainParams> {
     };
 }
 
-// export async function getWhoisInfo(hostname: string): Promise<WhoisDomainParams> {
-//     const now = new Date();
-//
-//     const domain = getRegistrableDomain(hostname) ?? null;
-//
-//     if (!domain) {
-//         return getWhoisDomainParams(now, WhoisStatus.UNSUPPORTED);
-//     }
-//
-//     const url
-// }
+export async function getWhoisInfo(hostname: string): Promise<WhoisDomainParams> {
+    const now = new Date();
+
+    const domain = getRegistrableDomain(hostname) ?? null;
+
+    if (!domain) {
+        return getWhoisDomainParams(now, WhoisStatus.UNSUPPORTED);
+    }
+
+    const fetched: FetchWhoisInfoResponse = await fetchWhoisTextViaCli(domain);
+
+    if (!fetched.ok) {
+        if (fetched.status === 404) {
+            return getWhoisDomainParams(now, WhoisStatus.MISSING, now);
+        }
+
+        return getWhoisDomainParams(now, WhoisStatus.ERROR, now);
+    }
+
+    const registeredAt = extractWhoisRegistrationDate(fetched.text);
+    let status: WhoisStatus = WhoisStatus.MISSING;
+
+    if (registeredAt) {
+        status = WhoisStatus.OK;
+    } else if (isWhoisRedacted(fetched.text)) {
+        status = WhoisStatus.REDACTED;
+    }
+
+    return {
+        ...getWhoisDomainParams(now, status, now, registeredAt),
+        whoisRaw: fetched.text,
+    };
+}
 
 function getRdapDomainParams(
     date: Date,

@@ -1,6 +1,6 @@
 import { describe, beforeEach, afterEach, it, vi, expect, Mock } from 'vitest';
 import { getTld } from '@/lib/utils';
-import { extractRegistrationDate, fetchRdapJson, getRdapUrl, isRedactedRegistration } from '@/lib/rdap/rdap.endpoints';
+import { extractRegistrationDate, fetchRdapJson, getRdapUrl, isRedactedRdapRegistration } from '@/lib/rdap/rdap.endpoints';
 
 vi.mock('@/lib/utils', () => ({
     getTld: vi.fn(),
@@ -768,7 +768,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(true);
     });
 
@@ -780,7 +780,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(true);
     });
 
@@ -792,7 +792,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(true);
     });
 
@@ -804,7 +804,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(false);
     });
 
@@ -816,7 +816,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(false);
     });
 
@@ -828,7 +828,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(true);
     });
 
@@ -840,7 +840,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(true);
     });
 
@@ -849,17 +849,17 @@ describe('RDAP Redacted registration check tests', () => {
             events: [],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(false);
     });
 
     it('should return false for non-object input (asRdapEvents handles this)', () => {
-        expect(isRedactedRegistration(null)).toBe(false);
-        expect(isRedactedRegistration(undefined)).toBe(false);
-        expect(isRedactedRegistration(42)).toBe(false);
-        expect(isRedactedRegistration('string')).toBe(false);
-        expect(isRedactedRegistration(true)).toBe(false);
-        expect(isRedactedRegistration([])).toBe(false);
+        expect(isRedactedRdapRegistration(null)).toBe(false);
+        expect(isRedactedRdapRegistration(undefined)).toBe(false);
+        expect(isRedactedRdapRegistration(42)).toBe(false);
+        expect(isRedactedRdapRegistration('string')).toBe(false);
+        expect(isRedactedRdapRegistration(true)).toBe(false);
+        expect(isRedactedRdapRegistration([])).toBe(false);
     });
 
     it('should return false when events is not an array (asRdapEvents handles this)', () => {
@@ -867,7 +867,7 @@ describe('RDAP Redacted registration check tests', () => {
             events: 'not an array',
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(false);
     });
 
@@ -876,7 +876,7 @@ describe('RDAP Redacted registration check tests', () => {
             otherProperty: 'value',
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(false);
     });
 
@@ -885,7 +885,7 @@ describe('RDAP Redacted registration check tests', () => {
             events: [null, undefined, 'string', 42, true, [], {}, { eventAction: 'registration', eventDate: '' }],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(true);
     });
 
@@ -897,7 +897,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(true);
     });
 
@@ -909,7 +909,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(false); // First valid registration is found
     });
 
@@ -922,7 +922,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(true);
     });
 
@@ -935,7 +935,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(true);
     });
 
@@ -947,7 +947,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(false); // eventDate is not empty string, just whitespace
     });
 
@@ -959,7 +959,7 @@ describe('RDAP Redacted registration check tests', () => {
             ],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(false); // Not null/undefined/empty string
     });
 
@@ -976,7 +976,7 @@ describe('RDAP Redacted registration check tests', () => {
             other: [1, 2, 3],
         };
 
-        const result = isRedactedRegistration(rdapJson);
+        const result = isRedactedRdapRegistration(rdapJson);
         expect(result).toBe(true);
     });
 
@@ -995,7 +995,7 @@ describe('RDAP Redacted registration check tests', () => {
                 events: [{ eventAction: 'registration', eventDate: dateStr }],
             };
 
-            const result = isRedactedRegistration(rdapJson);
+            const result = isRedactedRdapRegistration(rdapJson);
             expect(result).toBe(false);
         });
     });
@@ -1015,7 +1015,7 @@ describe('RDAP Redacted registration check tests', () => {
                 events: [{ eventAction, eventDate: null }],
             };
 
-            const result = isRedactedRegistration(rdapJson);
+            const result = isRedactedRdapRegistration(rdapJson);
             expect(result).toBe(expected);
         });
     });

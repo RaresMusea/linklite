@@ -56,6 +56,7 @@ describe('Fetch WHOIS text via CLI tests', () => {
 
             expect(result).toEqual({
                 ok: true,
+                status: 200,
                 text: mockStdout,
             });
 
@@ -82,6 +83,7 @@ describe('Fetch WHOIS text via CLI tests', () => {
 
             expect(result).toEqual({
                 ok: true,
+                status: 200,
                 text: 'Domain: example.com\nRegistrar: Example Registrar\nWarning: some warning message',
             });
         });
@@ -97,6 +99,7 @@ describe('Fetch WHOIS text via CLI tests', () => {
 
             expect(result).toEqual({
                 ok: true,
+                status: 200,
                 text: 'Domain: example.com',
             });
         });
@@ -110,6 +113,7 @@ describe('Fetch WHOIS text via CLI tests', () => {
 
             expect(result).toEqual({
                 ok: false,
+                status: 404,
                 error: 'Empty WHOIS output',
             });
         });
@@ -123,6 +127,7 @@ describe('Fetch WHOIS text via CLI tests', () => {
 
             expect(result).toEqual({
                 ok: false,
+                status: 404,
                 error: 'Empty WHOIS output',
             });
         });
@@ -136,6 +141,7 @@ describe('Fetch WHOIS text via CLI tests', () => {
 
             expect(result).toEqual({
                 ok: false,
+                status: 404,
                 error: 'Empty WHOIS output',
             });
         });
@@ -161,7 +167,6 @@ describe('Fetch WHOIS text via CLI tests', () => {
     describe('error cases', () => {
         it('should handle execFile error with extracted error info', async () => {
             const mockError: ErrorWithCode = new Error('WHOIS command failed');
-            mockError.code = 1;
 
             (execFileMock as Mock).mockImplementation((command, args, options, callback) => {
                 callback(mockError, null);
@@ -174,12 +179,11 @@ describe('Fetch WHOIS text via CLI tests', () => {
 
             expect(result).toEqual({
                 ok: false,
+                status: 500,
                 error: 'WHOIS command failed',
-                code: 1,
             });
 
             expect(extractErrorMessage).toHaveBeenCalledWith(mockError);
-            expect(extractErrorCode).toHaveBeenCalledWith(mockError);
         });
 
         it('should handle timeout error', async () => {
@@ -198,7 +202,7 @@ describe('Fetch WHOIS text via CLI tests', () => {
             expect(result).toEqual({
                 ok: false,
                 error: 'Command timed out',
-                code: undefined,
+                status: 500
             });
         });
 
@@ -218,7 +222,7 @@ describe('Fetch WHOIS text via CLI tests', () => {
             expect(result).toEqual({
                 ok: false,
                 error: 'Command failed: whois not found',
-                code: undefined,
+                status: 500,
             });
         });
 
@@ -238,7 +242,7 @@ describe('Fetch WHOIS text via CLI tests', () => {
             expect(result).toEqual({
                 ok: false,
                 error: 'maxBuffer exceeded',
-                code: undefined,
+                status: 500,
             });
         });
 
@@ -257,7 +261,7 @@ describe('Fetch WHOIS text via CLI tests', () => {
             expect(result).toEqual({
                 ok: false,
                 error: 'Unknown error',
-                code: undefined,
+                status: 500,
             });
         });
 
@@ -276,7 +280,7 @@ describe('Fetch WHOIS text via CLI tests', () => {
             expect(result).toEqual({
                 ok: false,
                 error: 'Something went wrong',
-                code: undefined,
+                status: 500,
             });
         });
     });

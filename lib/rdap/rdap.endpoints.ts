@@ -76,7 +76,7 @@ export async function fetchRdapJson(url: string, timeoutMs = 8000): Promise<Fetc
     }
 }
 
-export function isRedactedRegistration(rdapJson: unknown): boolean {
+export function isRedactedRdapRegistration(rdapJson: unknown): boolean {
     const events = asRdapEvents(rdapJson);
     if (!events) return false;
 

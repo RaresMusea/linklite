@@ -1,6 +1,6 @@
 import { describe, beforeEach, afterEach, it, vi, expect, Mock } from 'vitest';
 import { getRegistrableDomain } from '@/lib/utils';
-import { extractRegistrationDate, fetchRdapJson, getRdapUrl, isRedactedRegistration } from '@/lib/rdap/rdap.endpoints';
+import { extractRegistrationDate, fetchRdapJson, getRdapUrl, isRedactedRdapRegistration } from '@/lib/rdap/rdap.endpoints';
 import { getRdapInfo } from '@/dal/domains/domains.service';
 import { RdapStatus } from '@/lib/rdap/rdap.types';
 
@@ -13,7 +13,7 @@ vi.mock('@/lib/rdap/rdap.endpoints', () => ({
     getRdapUrl: vi.fn(),
     fetchRdapJson: vi.fn(),
     extractRegistrationDate: vi.fn(),
-    isRedactedRegistration: vi.fn(),
+    isRedactedRdapRegistration: vi.fn(),
 }));
 
 // Mock Date for consistent testing
@@ -160,13 +160,13 @@ describe('RDAP info retrieval tests', () => {
             });
 
             expect(extractRegistrationDate).toHaveBeenCalledWith(mockRdapJson);
-            expect(isRedactedRegistration).not.toHaveBeenCalled();
+            expect(isRedactedRdapRegistration).not.toHaveBeenCalled();
         });
 
 
         it('should return REDACTED status when registration is redacted', async () => {
             (extractRegistrationDate as Mock).mockReturnValue(null);
-            (isRedactedRegistration as Mock).mockReturnValue(true);
+            (isRedactedRdapRegistration as Mock).mockReturnValue(true);
 
             const result = await getRdapInfo('example.com');
 
@@ -179,12 +179,12 @@ describe('RDAP info retrieval tests', () => {
                 rdapRaw: mockRdapJson,
             });
             expect(extractRegistrationDate).toHaveBeenCalledWith(mockRdapJson);
-            expect(isRedactedRegistration).toHaveBeenCalledWith(mockRdapJson);
+            expect(isRedactedRdapRegistration).toHaveBeenCalledWith(mockRdapJson);
         });
 
         it('should return MISSING status when no registration info found and not redacted', async () => {
             (extractRegistrationDate as Mock).mockReturnValue(null);
-            (isRedactedRegistration as Mock).mockReturnValue(false);
+            (isRedactedRdapRegistration as Mock).mockReturnValue(false);
 
             const result = await getRdapInfo('example.com');
 
@@ -197,7 +197,7 @@ describe('RDAP info retrieval tests', () => {
                 rdapRaw: mockRdapJson,
             });
             expect(extractRegistrationDate).toHaveBeenCalledWith(mockRdapJson);
-            expect(isRedactedRegistration).toHaveBeenCalledWith(mockRdapJson);
+            expect(isRedactedRdapRegistration).toHaveBeenCalledWith(mockRdapJson);
         });
 
         it('should use different timeout if specified in getRdapUrl mock', async () => {
@@ -210,7 +210,7 @@ describe('RDAP info retrieval tests', () => {
                 json: mockRdapJson,
             });
             (extractRegistrationDate as Mock).mockReturnValue(null);
-            (isRedactedRegistration as Mock).mockReturnValue(false);
+            (isRedactedRdapRegistration as Mock).mockReturnValue(false);
 
             await getRdapInfo('example.com');
 
@@ -249,7 +249,7 @@ describe('RDAP info retrieval tests', () => {
                 json: mockRdapJson,
             });
             (extractRegistrationDate as Mock).mockReturnValue(registrationDate);
-            (isRedactedRegistration as Mock).mockReturnValue(false);
+            (isRedactedRdapRegistration as Mock).mockReturnValue(false);
 
             // Act
             const result = await getRdapInfo(host);
@@ -260,7 +260,7 @@ describe('RDAP info retrieval tests', () => {
             expect(fetchRdapJson).toHaveBeenCalledWith(mockUrl);
 
             expect(extractRegistrationDate).toHaveBeenCalledWith(mockRdapJson);
-            expect(isRedactedRegistration).not.toHaveBeenCalled();
+            expect(isRedactedRdapRegistration).not.toHaveBeenCalled();
 
             expect(result).toEqual({
                 registeredAt: registrationDate,
@@ -285,7 +285,7 @@ describe('RDAP info retrieval tests', () => {
                 json: mockRdapJson,
             });
             (extractRegistrationDate as Mock).mockReturnValue(null);
-            (isRedactedRegistration as Mock).mockReturnValue(true);
+            (isRedactedRdapRegistration as Mock).mockReturnValue(true);
 
             // Act
             const result = await getRdapInfo('gdpr-example.eu');
@@ -395,7 +395,7 @@ describe('RDAP info retrieval tests', () => {
                 json: complexRdapJson,
             });
             (extractRegistrationDate as Mock).mockReturnValue(new Date('2023-01-15T10:30:00Z'));
-            (isRedactedRegistration as Mock).mockReturnValue(false);
+            (isRedactedRdapRegistration as Mock).mockReturnValue(false);
 
             // Act
             const result = await getRdapInfo('example.com');
@@ -417,7 +417,7 @@ describe('RDAP info retrieval tests', () => {
                 json: { events: [] },
             });
             (extractRegistrationDate as Mock).mockReturnValue(null);
-            (isRedactedRegistration as Mock).mockReturnValue(false);
+            (isRedactedRdapRegistration as Mock).mockReturnValue(false);
 
             // Act
             const result = await getRdapInfo('deep.nested.sub.example.com');
@@ -441,7 +441,7 @@ describe('RDAP info retrieval tests', () => {
                 json: { events: [] },
             });
             (extractRegistrationDate as Mock).mockReturnValue(null);
-            (isRedactedRegistration as Mock).mockReturnValue(false);
+            (isRedactedRdapRegistration as Mock).mockReturnValue(false);
 
             // Act
             const result = await getRdapInfo('example.com');

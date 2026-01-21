@@ -10,7 +10,7 @@ export type WhoisDomainParams = {
     registeredAt: Date | null;
     status: WhoisStatus;
 
-    rdapRaw?: string;
+    whoisRaw?: string;
     whoisFetchedAt?: Date;
     checkedAt?: Date;
     source?: 'WHOIS';
@@ -19,10 +19,11 @@ export type WhoisDomainParams = {
 export type FetchWhoisInfoResponse =
     | {
           ok: true;
+          status: number;
           text: string;
       }
     | {
           ok: false;
-          error: string;
-          code?: number;
+          status: number;
+          error?: string;
       };
