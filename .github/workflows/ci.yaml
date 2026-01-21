@@ -170,13 +170,21 @@ jobs:
       - name: Install dependencies (uses cache)
         run: pnpm install --frozen-lockfile
 
+      - name: Install whois (required for WHOIS integration tests)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y whois
+          whois --version || true 
+
       - name: Generate Prisma
         run: pnpm prisma generate
-      
+
       - name: Run migrations
         run: pnpm prisma migrate deploy
 
       - name: Integration tests
+        env:
+          RUN_WHOIS_INTEGRATION: "1"
         run: pnpm test:integration
 
   build:
