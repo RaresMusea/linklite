@@ -1,6 +1,7 @@
-import { CreateDomainInput, RdapDomainParams, UpsertedDomain } from '@/dal/domains/domains.types';
+import { CreateDomainInput, UpsertedDomain } from '@/dal/domains/domains.types';
 import { prisma } from '@/lib/prisma';
 import { Domain, Prisma } from '@/generated/prisma/client';
+import { RdapDomainParams } from '@/lib/rdap/rdap.types';
 
 type PrismaLike = typeof prisma | Prisma.TransactionClient;
 
