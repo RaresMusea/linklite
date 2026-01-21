@@ -1,7 +1,12 @@
 import { describe, beforeEach, afterEach, it, vi, expect, Mock } from 'vitest';
 import { execFile } from 'node:child_process';
 import { extractErrorCode, extractErrorMessage } from '@/lib/errors/utils';
-import { extractWhoisRegistrationDate, fetchWhoisTextViaCli } from '@/lib/whois/whois.endpoints';
+import {
+    extractWhoisRegistrationDate,
+    fetchWhoisTextViaCli,
+    isWhoisNotFound,
+    isWhoisRedacted,
+} from '@/lib/whois/whois.endpoints';
 
 interface ErrorWithCode extends Error {
     code?: number | string;
@@ -760,5 +765,91 @@ Registered on:      definitely-not-a-date-format
             expect(extractWhoisRegistrationDate(text2)).toBeInstanceOf(Date);
             expect(extractWhoisRegistrationDate(text3)).toBeInstanceOf(Date);
         });
+    });
+});
+
+describe('isWhoisNotFound', () => {
+    it('should return true for "no match for"', () => {
+        expect(isWhoisNotFound('No match for "example.com"')).toBe(true);
+        expect(isWhoisNotFound('DOMAIN NOT FOUND')).toBe(true);
+    });
+
+    it('should return true for "not found"', () => {
+        expect(isWhoisNotFound('Domain not found in registry')).toBe(true);
+        expect(isWhoisNotFound('NOT FOUND: example.com')).toBe(true);
+    });
+
+    it('should return true for "no data found"', () => {
+        expect(isWhoisNotFound('No data found for this domain')).toBe(true);
+        expect(isWhoisNotFound('ERROR: NO DATA FOUND')).toBe(true);
+    });
+
+    it('should be case insensitive', () => {
+        expect(isWhoisNotFound('NO MATCH FOR')).toBe(true);
+        expect(isWhoisNotFound('No Match For')).toBe(true);
+        expect(isWhoisNotFound('no match for')).toBe(true);
+    });
+
+    it('should return false when no match patterns found', () => {
+        expect(isWhoisNotFound('Domain example.com is available')).toBe(false);
+        expect(isWhoisNotFound('')).toBe(false);
+        expect(isWhoisNotFound('Domain registered: example.com')).toBe(false);
+    });
+
+    it('should handle mixed case patterns', () => {
+        expect(isWhoisNotFound('No Match For domain')).toBe(true);
+        expect(isWhoisNotFound('Not Found in database')).toBe(true);
+        expect(isWhoisNotFound('No Data Found for query')).toBe(true);
+    });
+});
+
+describe('isWhoisRedacted', () => {
+    it('should return true for "redacted"', () => {
+        expect(isWhoisRedacted('Contact information redacted')).toBe(true);
+        expect(isWhoisRedacted('REDACTED FOR PRIVACY')).toBe(true);
+    });
+
+    it('should return true for "privacy"', () => {
+        expect(isWhoisRedacted('Privacy service enabled')).toBe(true);
+        expect(isWhoisRedacted('WHOIS PRIVACY PROTECTION')).toBe(true);
+    });
+
+    it('should return true for "gdpr"', () => {
+        expect(isWhoisRedacted('Data hidden due to GDPR')).toBe(true);
+        expect(isWhoisRedacted('GDPR protected data')).toBe(true);
+    });
+
+    it('should return true for "data protected"', () => {
+        expect(isWhoisRedacted('Registrant data protected')).toBe(true);
+        expect(isWhoisRedacted('DATA PROTECTED BY LAW')).toBe(true);
+    });
+
+    it('should return true for "not disclosed"', () => {
+        expect(isWhoisRedacted('Email not disclosed')).toBe(true);
+        expect(isWhoisRedacted('NOT DISCLOSED for privacy')).toBe(true);
+    });
+
+    it('should be case insensitive', () => {
+        expect(isWhoisRedacted('REDACTED')).toBe(true);
+        expect(isWhoisRedacted('Redacted')).toBe(true);
+        expect(isWhoisRedacted('redacted')).toBe(true);
+        expect(isWhoisRedacted('GDPR')).toBe(true);
+        expect(isWhoisRedacted('gdpr')).toBe(true);
+    });
+
+    it('should return false when no redaction patterns found', () => {
+        expect(isWhoisRedacted('Registrant: John Doe')).toBe(false);
+        expect(isWhoisRedacted('')).toBe(false);
+        expect(isWhoisRedacted('Domain is active')).toBe(false);
+    });
+
+    it('should handle mixed patterns in same text', () => {
+        expect(isWhoisRedacted('Data redacted due to GDPR compliance')).toBe(true);
+        expect(isWhoisRedacted('Privacy protection - data not disclosed')).toBe(true);
+    });
+
+    it('should match partial words correctly', () => {
+        expect(isWhoisRedacted('This is a privacy statement')).toBe(true);
+        expect(isWhoisRedacted('Data protection active')).toBe(true);
     });
 });

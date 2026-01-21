@@ -58,3 +58,11 @@ export async function fetchWhoisTextViaCli(
         };
     }
 }
+
+export function isWhoisNotFound(text: string): boolean {
+    return /no match for|not found|no data found/i.test(text);
+}
+
+export function isWhoisRedacted(text: string): boolean {
+    return /redacted|privacy|gdpr|data protect(ed|ion)?|not disclosed/i.test(text);
+}
