@@ -22,14 +22,12 @@ export async function upsertDomain(input: CreateDomainInput, db: PrismaLike = pr
             hostname: true,
             firstSeenAt: true,
 
-            // provider-agnostic derived fields
             registeredAt: true,
             checkedAt: true,
             source: true,
             status: true,
-
-            // RDAP cache metadata (optional, but useful)
             rdapFetchedAt: true,
+            whoisFetchedAt: true,
         },
     });
 }

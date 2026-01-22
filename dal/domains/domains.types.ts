@@ -13,4 +13,5 @@ export type UpsertedDomain = {
     status: string | null;
 
     rdapFetchedAt: Date | null;
+    whoisFetchedAt: Date | null;
 };

@@ -14,8 +14,6 @@ export async function createLink(input: CreateLinkInput): Promise<CreatedLink> {
     return prisma.$transaction(async (tx) => {
         const domain = await upsertDomain({ hostname }, tx);
 
-        console.log("CREATED DOMAIN", domain);
-
         return tx.link.create({
             data: {
                 slug: input.slug,
@@ -25,6 +23,7 @@ export async function createLink(input: CreateLinkInput): Promise<CreatedLink> {
             },
             select: {
                 id: true,
+                domainId: true,
                 slug: true,
                 targetUrl: true,
                 ownerId: true,

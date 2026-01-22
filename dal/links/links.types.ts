@@ -8,6 +8,7 @@ export type CreateLinkInput = {
 
 export type CreatedLink = {
     id: string;
+    domainId: string | null;
     slug: string;
     targetUrl: string;
     ownerId?: string | null;
