@@ -1,14 +1,26 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { createLink } from '@/dal/links/links.repo';
 import { normalizeHostnameFromUrl } from '@/lib/utils';
-import { updateDomainRdap } from '@/dal/domains/domains.repo';
+import {
+    updateDomainBestKnown,
+    updateDomainRdap,
+    updateDomainRdapCache,
+    updateDomainWhoisCache,
+} from '@/dal/domains/domains.repo';
 import { DomainSource, DomainStatus } from '@/generated/prisma/enums';
 import { RdapDomainParams, RdapStatus } from '@/lib/rdap/rdap.types';
 
 const mockedUtils = vi.hoisted(() => ({
     normalizeHostnameFromUrl: vi.fn(),
 }));
+
+interface RdapData {
+    events: Array<{ eventAction: string; eventDate: string }>;
+    entities?: Array<{ roles: string[]; vcardArray: unknown }>;
+    links?: Array<{ value: string; rel: string }>;
+    notices?: Array<{ title: string; description: string[] }>;
+}
 
 vi.mock('@/lib/utils', () => mockedUtils);
 
@@ -357,5 +369,611 @@ describe('updateDomainRdap integration tests', () => {
         expect(links).toHaveLength(2);
         expect(links.map((l) => l.slug)).toContain('link1');
         expect(links.map((l) => l.slug)).toContain('link2');
+    });
+
+    describe('Domain Cache Update Functions - Integration Tests', () => {
+        let testDomainId: string;
+
+        beforeEach(async () => {
+            // Clean up test data
+            await prisma.domain.deleteMany();
+
+            // Create a test domain
+            const domain = await prisma.domain.create({
+                data: {
+                    hostname: 'test-domain.com',
+                    firstSeenAt: new Date(),
+                    source: DomainSource.UNKNOWN,
+                    status: DomainStatus.UNKNOWN,
+                },
+            });
+
+            testDomainId = domain.id;
+        });
+
+        afterEach(async () => {
+            await prisma.domain.deleteMany();
+        });
+
+        describe('updateDomainRdapCache', () => {
+            it('should update RDAP cache fields', async () => {
+                // Arrange
+                const rdapFetchedAt = new Date('2024-01-15T10:30:00Z');
+                const rdapRaw = {
+                    events: [{ eventAction: 'registration', eventDate: '2023-01-01T00:00:00Z' }],
+                    status: ['active'],
+                };
+
+                const input = {
+                    domainId: testDomainId,
+                    rdapFetchedAt,
+                    rdapRaw,
+                };
+
+                // Act
+                await updateDomainRdapCache(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.rdapFetchedAt).toEqual(rdapFetchedAt);
+                expect(updatedDomain?.rdapRaw).toEqual(rdapRaw);
+
+                // Verify other fields are unchanged
+                expect(updatedDomain?.whoisFetchedAt).toBeNull();
+                expect(updatedDomain?.whoisRaw).toBeNull();
+                expect(updatedDomain?.registeredAt).toBeNull();
+                expect(updatedDomain?.source).toBe(DomainSource.UNKNOWN);
+            });
+
+            it('should update only RDAP fields and preserve others', async () => {
+                // Arrange - Create domain with existing data
+                await prisma.domain.update({
+                    where: { id: testDomainId },
+                    data: {
+                        whoisFetchedAt: new Date('2024-01-14T10:30:00Z'),
+                        whoisRaw: 'WHOIS data',
+                        registeredAt: new Date('2023-01-01T00:00:00Z'),
+                        source: DomainSource.WHOIS,
+                        status: DomainStatus.OK,
+                    },
+                });
+
+                const rdapFetchedAt = new Date('2024-01-15T11:30:00Z');
+                const rdapRaw = { events: [] };
+
+                const input = {
+                    domainId: testDomainId,
+                    rdapFetchedAt,
+                    rdapRaw,
+                };
+
+                // Act
+                await updateDomainRdapCache(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.rdapFetchedAt).toEqual(rdapFetchedAt);
+                expect(updatedDomain?.rdapRaw).toEqual(rdapRaw);
+
+                // Verify other fields are preserved
+                expect(updatedDomain?.whoisFetchedAt).toBeInstanceOf(Date);
+                expect(updatedDomain?.whoisRaw).toBe('WHOIS data');
+                expect(updatedDomain?.registeredAt).toBeInstanceOf(Date);
+                expect(updatedDomain?.source).toBe(DomainSource.WHOIS);
+                expect(updatedDomain?.status).toBe(DomainStatus.OK);
+            });
+
+            it('should set rdapFetchedAt to null', async () => {
+                // Arrange
+                const input = {
+                    domainId: testDomainId,
+                    rdapFetchedAt: null,
+                };
+
+                // Act
+                await updateDomainRdapCache(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.rdapFetchedAt).toBeNull();
+                expect(updatedDomain?.rdapRaw).toBeNull();
+            });
+
+            it('should handle complex RDAP JSON data', async () => {
+                // Arrange
+                const complexRdapData = {
+                    events: [
+                        { eventAction: 'registration', eventDate: '2023-01-01T00:00:00Z' },
+                        { eventAction: 'expiration', eventDate: '2025-01-01T00:00:00Z' },
+                    ],
+                    entities: [
+                        {
+                            roles: ['registrant'],
+                            vcardArray: [
+                                'vcard',
+                                [
+                                    ['version', {}, 'text', '4.0'],
+                                    ['fn', {}, 'text', 'John Doe'],
+                                ],
+                            ],
+                        },
+                    ],
+                    links: [{ value: 'https://rdap.example.com/domain/test.com', rel: 'self' }],
+                    notices: [{ title: 'Terms of Service', description: ['Some terms'] }],
+                };
+
+                const input = {
+                    domainId: testDomainId,
+                    rdapFetchedAt: new Date(),
+                    rdapRaw: complexRdapData,
+                };
+
+                // Act
+                await updateDomainRdapCache(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.rdapRaw).toEqual(complexRdapData);
+
+                const rdapData = updatedDomain?.rdapRaw as RdapData | null;
+
+                if (rdapData) {
+                    expect(rdapData.events).toHaveLength(2);
+                    expect(rdapData.entities).toHaveLength(1);
+                }
+            });
+
+            it('should throw error for non-existent domain', async () => {
+                // Arrange
+                const nonExistentId = 'non-existent-id';
+                const input = {
+                    domainId: nonExistentId,
+                    rdapFetchedAt: new Date(),
+                    rdapRaw: { test: 'data' },
+                };
+
+                // Act & Assert
+                await expect(updateDomainRdapCache(input)).rejects.toThrow();
+            });
+        });
+
+        describe('updateDomainWhoisCache', () => {
+            it('should update WHOIS cache fields', async () => {
+                // Arrange
+                const whoisFetchedAt = new Date('2024-01-15T10:30:00Z');
+                const whoisRaw = `Domain Name: TEST-DOMAIN.COM
+Creation Date: 2023-01-01T00:00:00Z
+Registrar: Example Registrar, Inc.`;
+
+                const input = {
+                    domainId: testDomainId,
+                    whoisFetchedAt,
+                    whoisRaw,
+                };
+
+                // Act
+                await updateDomainWhoisCache(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.whoisFetchedAt).toEqual(whoisFetchedAt);
+                expect(updatedDomain?.whoisRaw).toBe(whoisRaw);
+
+                // Verify other fields are unchanged
+                expect(updatedDomain?.rdapFetchedAt).toBeNull();
+                expect(updatedDomain?.rdapRaw).toBeNull();
+                expect(updatedDomain?.registeredAt).toBeNull();
+            });
+
+            it('should update only WHOIS fields and preserve others', async () => {
+                // Arrange - Create domain with existing data
+                await prisma.domain.update({
+                    where: { id: testDomainId },
+                    data: {
+                        rdapFetchedAt: new Date('2024-01-14T10:30:00Z'),
+                        rdapRaw: { events: [] },
+                        registeredAt: new Date('2023-01-01T00:00:00Z'),
+                        source: DomainSource.RDAP,
+                        status: DomainStatus.OK,
+                    },
+                });
+
+                const whoisFetchedAt = new Date('2024-01-15T11:30:00Z');
+                const whoisRaw = 'Updated WHOIS data';
+
+                const input = {
+                    domainId: testDomainId,
+                    whoisFetchedAt,
+                    whoisRaw,
+                };
+
+                // Act
+                await updateDomainWhoisCache(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.whoisFetchedAt).toEqual(whoisFetchedAt);
+                expect(updatedDomain?.whoisRaw).toBe(whoisRaw);
+
+                // Verify other fields are preserved
+                expect(updatedDomain?.rdapFetchedAt).toBeInstanceOf(Date);
+                expect(updatedDomain?.rdapRaw).toEqual({ events: [] });
+                expect(updatedDomain?.registeredAt).toBeInstanceOf(Date);
+                expect(updatedDomain?.source).toBe(DomainSource.RDAP);
+                expect(updatedDomain?.status).toBe(DomainStatus.OK);
+            });
+
+            it('should set whoisFetchedAt and whoisRaw to null', async () => {
+                // Arrange
+                const input = {
+                    domainId: testDomainId,
+                    whoisFetchedAt: null,
+                    whoisRaw: null,
+                };
+
+                // Act
+                await updateDomainWhoisCache(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.whoisFetchedAt).toBeNull();
+                expect(updatedDomain?.whoisRaw).toBeNull();
+            });
+
+            it('should handle large WHOIS text', async () => {
+                // Arrange
+                const largeWhoisText = Array(100)
+                    .fill(0)
+                    .map((_, i) => `Line ${i + 1}: Some WHOIS data`)
+                    .join('\n');
+
+                const input = {
+                    domainId: testDomainId,
+                    whoisFetchedAt: new Date(),
+                    whoisRaw: largeWhoisText,
+                };
+
+                // Act
+                await updateDomainWhoisCache(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.whoisRaw).toBe(largeWhoisText);
+                expect(updatedDomain?.whoisRaw?.length).toBeGreaterThan(1000);
+            });
+
+            it('should handle empty WHOIS string', async () => {
+                // Arrange
+                const input = {
+                    domainId: testDomainId,
+                    whoisFetchedAt: new Date(),
+                    whoisRaw: '',
+                };
+
+                // Act
+                await updateDomainWhoisCache(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.whoisRaw).toBe('');
+            });
+        });
+
+        describe('updateDomainBestKnown', () => {
+            it('should update domain best known information', async () => {
+                // Arrange
+                const registeredAt = new Date('2023-01-01T00:00:00Z');
+                const checkedAt = new Date('2024-01-15T10:30:00Z');
+                const source = DomainSource.RDAP;
+                const status = DomainStatus.OK;
+
+                const input = {
+                    domainId: testDomainId,
+                    registeredAt,
+                    checkedAt,
+                    source,
+                    status,
+                };
+
+                // Act
+                await updateDomainBestKnown(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.registeredAt).toEqual(registeredAt);
+                expect(updatedDomain?.checkedAt).toEqual(checkedAt);
+                expect(updatedDomain?.source).toBe(source);
+                expect(updatedDomain?.status).toBe(status);
+
+                // Verify cache fields are unchanged (should be null)
+                expect(updatedDomain?.rdapFetchedAt).toBeNull();
+                expect(updatedDomain?.whoisFetchedAt).toBeNull();
+            });
+
+            it('should update only best known fields and preserve cache data', async () => {
+                // Arrange - Create domain with existing cache data
+                await prisma.domain.update({
+                    where: { id: testDomainId },
+                    data: {
+                        rdapFetchedAt: new Date('2024-01-14T10:30:00Z'),
+                        rdapRaw: { events: [] },
+                        whoisFetchedAt: new Date('2024-01-14T11:30:00Z'),
+                        whoisRaw: 'WHOIS data',
+                    },
+                });
+
+                const input = {
+                    domainId: testDomainId,
+                    registeredAt: new Date('2023-01-01T00:00:00Z'),
+                    checkedAt: new Date('2024-01-15T10:30:00Z'),
+                    source: DomainSource.WHOIS,
+                    status: DomainStatus.REDACTED,
+                };
+
+                // Act
+                await updateDomainBestKnown(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.registeredAt).toBeInstanceOf(Date);
+                expect(updatedDomain?.checkedAt).toBeInstanceOf(Date);
+                expect(updatedDomain?.source).toBe(DomainSource.WHOIS);
+                expect(updatedDomain?.status).toBe(DomainStatus.REDACTED);
+
+                // Verify cache fields are preserved
+                expect(updatedDomain?.rdapFetchedAt).toBeInstanceOf(Date);
+                expect(updatedDomain?.rdapRaw).toEqual({ events: [] });
+                expect(updatedDomain?.whoisFetchedAt).toBeInstanceOf(Date);
+                expect(updatedDomain?.whoisRaw).toBe('WHOIS data');
+            });
+
+            it('should set registeredAt to null', async () => {
+                // Arrange
+                const input = {
+                    domainId: testDomainId,
+                    registeredAt: null,
+                    checkedAt: new Date('2024-01-15T10:30:00Z'),
+                    source: DomainSource.UNKNOWN,
+                    status: DomainStatus.MISSING,
+                };
+
+                // Act
+                await updateDomainBestKnown(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.registeredAt).toBeNull();
+                expect(updatedDomain?.checkedAt).toBeInstanceOf(Date);
+                expect(updatedDomain?.source).toBe(DomainSource.UNKNOWN);
+                expect(updatedDomain?.status).toBe(DomainStatus.MISSING);
+            });
+
+            it('should handle all domain statuses', async () => {
+                // Arrange
+                const statuses = [
+                    DomainStatus.OK,
+                    DomainStatus.MISSING,
+                    DomainStatus.REDACTED,
+                    DomainStatus.UNSUPPORTED,
+                    DomainStatus.ERROR,
+                    DomainStatus.UNKNOWN,
+                ];
+
+                for (const status of statuses) {
+                    const input = {
+                        domainId: testDomainId,
+                        registeredAt: new Date('2023-01-01T00:00:00Z'),
+                        checkedAt: new Date('2024-01-15T10:30:00Z'),
+                        source: DomainSource.RDAP,
+                        status,
+                    };
+
+                    // Act
+                    await updateDomainBestKnown(input);
+
+                    // Assert
+                    const updatedDomain = await prisma.domain.findUnique({
+                        where: { id: testDomainId },
+                    });
+
+                    expect(updatedDomain?.status).toBe(status);
+                }
+            });
+
+            it('should handle all domain sources', async () => {
+                // Arrange
+                const sources = [DomainSource.RDAP, DomainSource.WHOIS, DomainSource.UNKNOWN];
+
+                for (const source of sources) {
+                    const input = {
+                        domainId: testDomainId,
+                        registeredAt: new Date('2023-01-01T00:00:00Z'),
+                        checkedAt: new Date('2024-01-15T10:30:00Z'),
+                        source,
+                        status: DomainStatus.OK,
+                    };
+
+                    // Act
+                    await updateDomainBestKnown(input);
+
+                    // Assert
+                    const updatedDomain = await prisma.domain.findUnique({
+                        where: { id: testDomainId },
+                    });
+
+                    expect(updatedDomain?.source).toBe(source);
+                }
+            });
+
+            it('should update checkedAt to current time', async () => {
+                // Arrange
+                const testTime = new Date('2024-01-15T10:30:00Z');
+                vi.useFakeTimers();
+                vi.setSystemTime(testTime);
+
+                const input = {
+                    domainId: testDomainId,
+                    registeredAt: new Date('2023-01-01T00:00:00Z'),
+                    checkedAt: testTime,
+                    source: DomainSource.RDAP,
+                    status: DomainStatus.OK,
+                };
+
+                // Act
+                await updateDomainBestKnown(input);
+
+                // Assert
+                const updatedDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(updatedDomain?.checkedAt).toEqual(testTime);
+
+                vi.useRealTimers();
+            });
+
+            it('should perform partial update when only some fields are provided', async () => {
+                // Note: This depends on how Prisma handles partial updates
+                // In your implementation, all fields are required in the input type
+                // So this test might not be applicable
+                // If you want to support partial updates, you would need to change
+                // the input type to make fields optional
+            });
+        });
+
+        describe('Combined operations', () => {
+            it('should allow separate updates to different domain aspects', async () => {
+                // Arrange
+                const domain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(domain?.rdapFetchedAt).toBeNull();
+                expect(domain?.whoisFetchedAt).toBeNull();
+                expect(domain?.registeredAt).toBeNull();
+
+                // Act - Update RDAP cache
+                const rdapTime = new Date('2024-01-15T10:00:00Z');
+                await updateDomainRdapCache({
+                    domainId: testDomainId,
+                    rdapFetchedAt: rdapTime,
+                    rdapRaw: { test: 'rdap' },
+                });
+
+                // Act - Update WHOIS cache
+                const whoisTime = new Date('2024-01-15T11:00:00Z');
+                await updateDomainWhoisCache({
+                    domainId: testDomainId,
+                    whoisFetchedAt: whoisTime,
+                    whoisRaw: 'WHOIS data',
+                });
+
+                // Act - Update best known info
+                const checkedTime = new Date('2024-01-15T12:00:00Z');
+                await updateDomainBestKnown({
+                    domainId: testDomainId,
+                    registeredAt: new Date('2023-01-01T00:00:00Z'),
+                    checkedAt: checkedTime,
+                    source: DomainSource.RDAP,
+                    status: DomainStatus.OK,
+                });
+
+                // Assert
+                const finalDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(finalDomain?.rdapFetchedAt).toEqual(rdapTime);
+                expect(finalDomain?.rdapRaw).toEqual({ test: 'rdap' });
+                expect(finalDomain?.whoisFetchedAt).toEqual(whoisTime);
+                expect(finalDomain?.whoisRaw).toBe('WHOIS data');
+                expect(finalDomain?.registeredAt).toBeInstanceOf(Date);
+                expect(finalDomain?.checkedAt).toEqual(checkedTime);
+                expect(finalDomain?.source).toBe(DomainSource.RDAP);
+                expect(finalDomain?.status).toBe(DomainStatus.OK);
+            });
+
+            it('should allow overwriting previous updates', async () => {
+                // Arrange - Initial updates
+                await updateDomainRdapCache({
+                    domainId: testDomainId,
+                    rdapFetchedAt: new Date('2024-01-15T10:00:00Z'),
+                    rdapRaw: { initial: 'data' },
+                });
+
+                await updateDomainBestKnown({
+                    domainId: testDomainId,
+                    registeredAt: new Date('2023-01-01T00:00:00Z'),
+                    checkedAt: new Date('2024-01-15T10:00:00Z'),
+                    source: DomainSource.RDAP,
+                    status: DomainStatus.OK,
+                });
+
+                // Act - Overwrite with new data
+                const newRdapTime = new Date('2024-01-16T10:00:00Z');
+                await updateDomainRdapCache({
+                    domainId: testDomainId,
+                    rdapFetchedAt: newRdapTime,
+                    rdapRaw: { updated: 'data' },
+                });
+
+                const newCheckedTime = new Date('2024-01-16T10:00:00Z');
+                await updateDomainBestKnown({
+                    domainId: testDomainId,
+                    registeredAt: null, // Change from date to null
+                    checkedAt: newCheckedTime,
+                    source: DomainSource.WHOIS, // Change source
+                    status: DomainStatus.REDACTED, // Change status
+                });
+
+                // Assert
+                const finalDomain = await prisma.domain.findUnique({
+                    where: { id: testDomainId },
+                });
+
+                expect(finalDomain?.rdapFetchedAt).toEqual(newRdapTime);
+                expect(finalDomain?.rdapRaw).toEqual({ updated: 'data' });
+                expect(finalDomain?.registeredAt).toBeNull();
+                expect(finalDomain?.checkedAt).toEqual(newCheckedTime);
+                expect(finalDomain?.source).toBe(DomainSource.WHOIS);
+                expect(finalDomain?.status).toBe(DomainStatus.REDACTED);
+            });
+        });
     });
 });

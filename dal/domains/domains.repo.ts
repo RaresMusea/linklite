@@ -1,4 +1,10 @@
-import { CreateDomainInput, UpsertedDomain } from '@/dal/domains/domains.types';
+import {
+    CreateDomainInput,
+    UpdateDomainBestKnownInput,
+    UpdateDomainRdapCacheInput,
+    UpdateDomainWhoisCacheInput,
+    UpsertedDomain,
+} from '@/dal/domains/domains.types';
 import { prisma } from '@/lib/prisma';
 import { Domain, Prisma } from '@/generated/prisma/client';
 import { RdapDomainParams } from '@/lib/rdap/rdap.types';
@@ -51,5 +57,38 @@ export async function updateDomainRdap(domainId: string, params: RdapDomainParam
     return prisma.domain.update({
         where: { id: domainId },
         data,
+    });
+}
+
+export async function updateDomainRdapCache(input: UpdateDomainRdapCacheInput): Promise<void> {
+    await prisma.domain.update({
+        where: { id: input.domainId },
+        data: {
+            rdapFetchedAt: input.rdapFetchedAt,
+            rdapRaw: input.rdapRaw,
+        },
+    });
+}
+
+
+export async function updateDomainWhoisCache(input: UpdateDomainWhoisCacheInput): Promise<void> {
+    await prisma.domain.update({
+        where: { id: input.domainId },
+        data: {
+            whoisFetchedAt: input.whoisFetchedAt,
+            whoisRaw: input.whoisRaw,
+        },
+    });
+}
+
+export async function updateDomainBestKnown(input: UpdateDomainBestKnownInput): Promise<void> {
+    await prisma.domain.update({
+        where: { id: input.domainId },
+        data: {
+            registeredAt: input.registeredAt,
+            checkedAt: input.checkedAt,
+            source: input.source,
+            status: input.status,
+        },
     });
 }
