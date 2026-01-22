@@ -53,6 +53,7 @@ describe('POST /api/shorten', () => {
 
         vi.mocked(createLink).mockResolvedValueOnce({
             id: '1',
+            domainId: '2',
             slug: 'abc123',
             targetUrl: 'https://example.com',
             ownerId: null,
@@ -67,6 +68,7 @@ describe('POST /api/shorten', () => {
         // created link payload
         expect(json.data.created).toEqual({
             id: '1',
+            domainId: '2',
             slug: 'abc123',
             targetUrl: 'https://example.com',
             ownerId: null,
@@ -90,6 +92,7 @@ describe('POST /api/shorten', () => {
 
         vi.mocked(createLink).mockRejectedValueOnce(p2002).mockResolvedValueOnce({
             id: '2',
+            domainId: '2',
             slug: 'ok',
             targetUrl: 'https://example.com',
             ownerId: null,
