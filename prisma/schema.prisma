@@ -22,6 +22,13 @@ enum DomainStatus {
   UNKNOWN
 }
 
+enum DomainEnrichmentJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  ERROR
+}
+
 model Link {
   id        String   @id @default(cuid())
   slug      String   @unique
@@ -51,14 +58,32 @@ model Domain {
   rdapFetchedAt DateTime? @map("rdap_fetched_at")
 
   // WHOIS cache
-  whoisRaw       String?     @map("whois_raw")
+  whoisRaw       String?   @map("whois_raw")
   whoisFetchedAt DateTime? @map("whois_fetched_at")
 
-  rdapFetchLockedUntil DateTime? @map("rdap_fetch_locked_until")
+  rdapFetchLockedUntil  DateTime? @map("rdap_fetch_locked_until")
   whoisFetchLockedUntil DateTime? @map("whois_fetch_locked_until")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  links Link[]
+  links                Link[]
+  domainEnrichmentJobs DomainEnrichmentJob[]
+}
+
+model DomainEnrichmentJob {
+  id       String @id @default(cuid())
+  domainId String @unique @map("domain_id")
+
+  status    DomainEnrichmentJobStatus @default(PENDING) @map("status")
+  runAfter  DateTime                  @default(now()) @map("run_after")
+  attempts  Int                       @default(0)
+  lastError String?                   @map("last_error")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  domain Domain @relation(fields: [domainId], references: [id])
+
+  @@index([status, runAfter])
 }
