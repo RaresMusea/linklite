@@ -140,6 +140,7 @@ describe('updateDomainRdap integration tests', () => {
         const rdapParams: RdapDomainParams = {
             registeredAt: new Date('2020-01-01'),
             status: RdapStatus.OK,
+            checkedAt: new Date('2024-01-01'),
             source: 'RDAP',
             // rdapFetchedAt not provided
         };
@@ -473,7 +474,7 @@ describe('updateDomainRdap integration tests', () => {
                 // Arrange
                 const input = {
                     domainId: testDomainId,
-                    rdapFetchedAt: null,
+                    rdapFetchedAt: undefined,
                 };
 
                 // Act
@@ -625,8 +626,8 @@ Registrar: Example Registrar, Inc.`;
                 // Arrange
                 const input = {
                     domainId: testDomainId,
-                    whoisFetchedAt: null,
-                    whoisRaw: null,
+                    whoisFetchedAt: undefined,
+                    whoisRaw: undefined,
                 };
 
                 // Act

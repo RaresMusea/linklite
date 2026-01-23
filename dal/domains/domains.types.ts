@@ -20,18 +20,25 @@ export type UpsertedDomain = {
 
 export type UpdateDomainRdapCacheInput = {
     domainId: string;
-    rdapFetchedAt: Date | null;
+    rdapFetchedAt?: Date;
     rdapRaw?: Prisma.InputJsonValue;
 };
 
 export type UpdateDomainWhoisCacheInput = {
     domainId: string;
-    whoisFetchedAt: Date | null;
-    whoisRaw: string | null;
+    whoisFetchedAt?: Date;
+    whoisRaw?: string;
 };
 
 export type UpdateDomainBestKnownInput = {
     domainId: string;
+    registeredAt: Date | null;
+    checkedAt: Date;
+    source: DomainSource;
+    status: DomainStatus;
+};
+
+export type BestKnownDomainInfo = {
     registeredAt: Date | null;
     checkedAt: Date;
     source: DomainSource;

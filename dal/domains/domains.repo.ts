@@ -86,7 +86,7 @@ export async function updateDomainBestKnown(input: UpdateDomainBestKnownInput): 
         where: { id: input.domainId },
         data: {
             registeredAt: input.registeredAt,
-            checkedAt: input.checkedAt,
+            checkedAt: input.checkedAt! ?? null,
             source: input.source,
             status: input.status,
         },

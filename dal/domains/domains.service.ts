@@ -6,9 +6,12 @@ import {
     isRedactedRdapRegistration,
 } from '@/lib/rdap/rdap.endpoints';
 import { FetchRdapInfoResponse, RdapDomainParams, RdapStatus } from '@/lib/rdap/rdap.types';
-import { Prisma } from '@/generated/prisma/client';
+import { DomainSource, DomainStatus, Prisma } from '@/generated/prisma/client';
 import { FetchWhoisInfoResponse, WhoisDomainParams, WhoisStatus } from '@/lib/whois/whois.types';
 import { extractWhoisRegistrationDate, fetchWhoisTextViaCli, isWhoisRedacted } from '@/lib/whois/whois.endpoints';
+import { BestKnownDomainInfo } from '@/dal/domains/domains.types';
+import { mapStatusToDomainStatus } from '@/dal/domains/domains.mapper';
+import { getStatusPriority } from '@/lib/domain_enrichment_job/priority';
 
 export async function getRdapInfo(host: string): Promise<RdapDomainParams> {
     const now = new Date();
@@ -84,6 +87,51 @@ export async function getWhoisInfo(hostname: string): Promise<WhoisDomainParams>
     };
 }
 
+export function pickBestKnown(rdap: RdapDomainParams, whois: WhoisDomainParams | null): BestKnownDomainInfo {
+    const rdapCheckedAt = requireDate(rdap.checkedAt, 'rdap.checkedAt');
+    const whoisCheckedAt = whois ? requireDate(whois.checkedAt, 'whois.checkedAt') : null;
+
+    if (rdap.registeredAt) {
+        return {
+            registeredAt: rdap.registeredAt,
+            checkedAt: rdapCheckedAt,
+            source: DomainSource.RDAP,
+            status: mapStatusToDomainStatus(rdap.status),
+        };
+    }
+
+    if (whois?.registeredAt) {
+        return {
+            registeredAt: whois.registeredAt,
+            checkedAt: whoisCheckedAt!,
+            source: DomainSource.WHOIS,
+            status: mapStatusToDomainStatus(whois.status),
+        };
+    }
+
+    const rdapStatus = mapStatusToDomainStatus(rdap.status);
+    const whoisStatus = whois ? mapStatusToDomainStatus(whois.status) : DomainStatus.UNKNOWN;
+
+    const whoisStatusPriority = getStatusPriority(whoisStatus);
+    const rdapStatusPriority = getStatusPriority(rdapStatus);
+
+    if (whois && whoisStatusPriority > rdapStatusPriority) {
+        return {
+            registeredAt: null,
+            checkedAt: whoisCheckedAt!,
+            source: DomainSource.WHOIS,
+            status: whoisStatus,
+        };
+    }
+
+    return {
+        registeredAt: null,
+        checkedAt: rdapCheckedAt,
+        source: DomainSource.RDAP,
+        status: rdapStatus,
+    };
+}
+
 function getRdapDomainParams(
     date: Date,
     status: RdapStatus,
@@ -112,4 +160,11 @@ function getWhoisDomainParams(
         checkedAt: date,
         whoisFetchedAt,
     };
+}
+
+function requireDate(value: Date | null | undefined, name: string): Date {
+    if (!value) {
+        throw new Error(`Invariant violated: ${name} is missing`);
+    }
+    return value;
 }
