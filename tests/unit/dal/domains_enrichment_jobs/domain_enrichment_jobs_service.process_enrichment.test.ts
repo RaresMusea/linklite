@@ -76,6 +76,7 @@ describe('processDomainEnrichment', () => {
                 domainId: mockDomainId,
                 rdapFetchedAt: mockNow,
                 rdapRaw: { some: 'data' },
+                status: DomainStatus.OK,
             });
             expect(mockGetWhoisInfo).not.toHaveBeenCalled();
             expect(mockUpdateDomainWhoisCache).not.toHaveBeenCalled();
@@ -116,6 +117,7 @@ describe('processDomainEnrichment', () => {
                 domainId: mockDomainId,
                 rdapFetchedAt: mockNow,
                 rdapRaw: { redacted: true },
+                status: DomainStatus.REDACTED,
             });
             expect(mockGetWhoisInfo).not.toHaveBeenCalled();
             expect(mockUpdateDomainWhoisCache).not.toHaveBeenCalled();
@@ -166,12 +168,14 @@ describe('processDomainEnrichment', () => {
                 domainId: mockDomainId,
                 rdapFetchedAt: undefined,
                 rdapRaw: undefined,
+                status: DomainStatus.UNSUPPORTED,
             });
             expect(mockGetWhoisInfo).toHaveBeenCalledWith(mockHostname);
             expect(mockUpdateDomainWhoisCache).toHaveBeenCalledWith({
                 domainId: mockDomainId,
                 whoisFetchedAt: mockNow,
                 whoisRaw: 'Domain registered on 2019-01-01',
+                status: DomainStatus.OK,
             });
             expect(mockPickBestKnown).toHaveBeenCalledWith(mockRdapResponse, mockWhoisResponse);
             expect(mockUpdateDomainBestKnown).toHaveBeenCalledWith({

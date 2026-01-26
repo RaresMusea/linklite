@@ -10,6 +10,7 @@ export async function processDomainEnrichment(hostname: string, domainId: string
         domainId: domainId,
         rdapFetchedAt: rdap.rdapFetchedAt,
         rdapRaw: rdap.rdapRaw,
+        status: rdap.status,
     });
 
     let whois: WhoisDomainParams | null = null;
@@ -26,6 +27,7 @@ export async function processDomainEnrichment(hostname: string, domainId: string
             domainId: domainId,
             whoisFetchedAt: whois.whoisFetchedAt,
             whoisRaw: whois.whoisRaw,
+            status: whois.status,
         });
     }
 
