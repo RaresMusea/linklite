@@ -11,3 +11,10 @@ export type ClaimedDomainJob = {
     hostname: string;
     attempts: number;
 };
+
+export type RequeueDomainEnrichmentJobInput = {
+    jobId: string;
+    attempts: number;
+    error: Error | string;
+    runAfter?: Date;
+};

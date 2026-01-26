@@ -1,5 +1,5 @@
 import {
-    ClaimedDomainJob,
+    ClaimedDomainJob, RequeueDomainEnrichmentJobInput,
     UpsertDomainEnrichmentJobInput,
 } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.types';
 import { prisma } from '@/lib/prisma';
@@ -85,4 +85,29 @@ export async function markDomainEnrichmentJobAsDone(jobId: string): Promise<void
             lastError: null,
         },
     });
+}
+
+export async function requeueDomainEnrichmentJob(input: RequeueDomainEnrichmentJobInput): Promise<void> {
+    const backoffMinutes = computeBackoffMinutes(input.attempts);
+    const nextRun = input.runAfter ?? new Date(Date.now() + backoffMinutes * 60_000);
+
+    await prisma.domainEnrichmentJob.update(
+        {
+            where: {
+                id: input.jobId
+            },
+            data: {
+                status: DomainEnrichmentJobStatus.PENDING,
+                runAfter: nextRun,
+                lockedUntil: null,
+                lastError: input.error instanceof Error ? input.error.message : String(input.error),
+            }
+        }
+    )
+}
+
+function computeBackoffMinutes(attempts: number): number {
+    const exp = Math.min(attempts, 10);
+
+    return Math.min(MAX_BACKOFF_MIN, Math.max(1, 2 **exp));
 }

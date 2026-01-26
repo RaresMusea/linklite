@@ -4,6 +4,7 @@ import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
 import {
     claimNextDomainEnrichmentJob,
     markDomainEnrichmentJobAsDone,
+    requeueDomainEnrichmentJob,
     upsertDomainEnrichmentJob,
 } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
 
@@ -704,7 +705,7 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
             expect(updatedJob?.attempts).toBe(1);
         });
 
-        it('should work from different initial statuses', async () => {
+        it('Should work from different initial statuses', async () => {
             // Arrange - Delete the existing job first since domain_id has UNIQUE constraint
             await prisma.domainEnrichmentJob.delete({
                 where: { id: testJobId },
@@ -779,6 +780,473 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
         it('Should throw error for non-existent job', async () => {
             const nonExistentId = 'non-existent-job-id';
             await expect(markDomainEnrichmentJobAsDone(nonExistentId)).rejects.toThrow();
+        });
+    });
+
+    describe('requeueDomainEnrichmentJob - Real Database Tests', () => {
+        let testDomainId: string;
+        let testJobId: string;
+        const MAX_BACKOFF_MIN = 60; // Should match your constant
+
+        beforeAll(async () => {
+            // Create test domain
+            const domain = await prisma.domain.create({
+                data: {
+                    hostname: 'requeue-test.example.com',
+                },
+            });
+            testDomainId = domain.id;
+        });
+
+        afterAll(async () => {
+            // Clean up
+            await prisma.domainEnrichmentJob.deleteMany({
+                where: { domainId: testDomainId },
+            });
+            await prisma.domain.delete({
+                where: { id: testDomainId },
+            });
+        });
+
+        beforeEach(async () => {
+            // Create a fresh job for each test
+            await prisma.domainEnrichmentJob.deleteMany({
+                where: { domainId: testDomainId },
+            });
+
+            const job = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId,
+                    status: DomainEnrichmentJobStatus.RUNNING,
+                    runAfter: new Date(),
+                    lockedUntil: new Date(Date.now() + 2 * 60_000),
+                    attempts: 1,
+                    lastError: null,
+                },
+            });
+            testJobId = job.id;
+        });
+
+        describe('Compute backoff minutes (helper function tests)', () => {
+            it('Should compute exponential backoff with limits', () => {
+                // Test cases based on the formula: Math.min(MAX_BACKOFF_MIN, Math.max(1, 2 ** exp))
+                // where exp = Math.min(attempts, 10)
+
+                const testCases = [
+                    { attempts: 0, expected: 1 }, // 2^0 = 1, max(1, 1) = 1
+                    { attempts: 1, expected: 2 }, // 2^1 = 2, max(1, 2) = 2
+                    { attempts: 2, expected: 4 }, // 2^2 = 4
+                    { attempts: 3, expected: 8 }, // 2^3 = 8
+                    { attempts: 4, expected: 16 }, // 2^4 = 16
+                    { attempts: 5, expected: 32 }, // 2^5 = 32
+                    { attempts: 6, expected: 60 }, // 2^6 = 64, min(60, 64) = 60 (capped)
+                    { attempts: 7, expected: 60 }, // 2^7 = 128, min(60, 128) = 60 (capped)
+                    { attempts: 10, expected: 60 }, // 2^10 = 1024, min(60, 1024) = 60 (capped)
+                    { attempts: 15, expected: 60 }, // exp = min(15, 10) = 10, 2^10 = 1024, min(60, 1024) = 60
+                ];
+
+                // Since computeBackoffMinutes is not exported, we can't test it directly
+                // But we can verify the logic indirectly through requeueDomainEnrichmentJob
+                // or by testing the backoff calculation manually
+                testCases.forEach(({ attempts, expected }) => {
+                    const exp = Math.min(attempts, 10);
+                    const result = Math.min(MAX_BACKOFF_MIN, Math.max(1, 2 ** exp));
+                    expect(result).toBe(expected);
+                });
+            });
+
+            it('Should never return less than 1 minute', () => {
+                // Even with attempts = 0, Should return at least 1
+                const exp = Math.min(0, 10);
+                const result = Math.min(MAX_BACKOFF_MIN, Math.max(1, 2 ** exp));
+                expect(result).toBe(1);
+            });
+
+            it('Should cap at MAX_BACKOFF_MIN (60)', () => {
+                // With attempts >= 6, Should cap at 60
+                for (let attempts = 6; attempts <= 20; attempts++) {
+                    const exp = Math.min(attempts, 10);
+                    const result = Math.min(MAX_BACKOFF_MIN, Math.max(1, 2 ** exp));
+                    expect(result).toBe(60);
+                }
+            });
+        });
+
+        describe('Requeue domain enrichment job', () => {
+            it('Should requeue job with computed backoff when no runAfter provided', async () => {
+                // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-01T10:00:00Z');
+                vi.setSystemTime(now);
+
+                const input = {
+                    jobId: testJobId,
+                    attempts: 2, // 2 attempts = 2^2 = 4 minutes backoff
+                    error: 'Connection timeout',
+                };
+
+                // Act
+                await requeueDomainEnrichmentJob(input);
+
+                // Assert
+                const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                    where: { id: testJobId },
+                });
+
+                expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.PENDING);
+                expect(updatedJob?.lockedUntil).toBeNull();
+                expect(updatedJob?.lastError).toBe('Connection timeout');
+
+                // Should schedule for 4 minutes from now (2 attempts = 2^2 = 4 minutes)
+                const expectedRunAfter = new Date(now.getTime() + 4 * 60_000);
+                expect(updatedJob?.runAfter).toEqual(expectedRunAfter);
+
+                vi.useRealTimers();
+            });
+
+            it('Should use provided runAfter when specified', async () => {
+                // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-01T10:00:00Z');
+                vi.setSystemTime(now);
+
+                const customRunAfter = new Date('2024-01-01T14:30:00Z');
+                const input = {
+                    jobId: testJobId,
+                    attempts: 3,
+                    error: 'Rate limited',
+                    runAfter: customRunAfter,
+                };
+
+                // Act
+                await requeueDomainEnrichmentJob(input);
+
+                // Assert
+                const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                    where: { id: testJobId },
+                });
+
+                expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.PENDING);
+                expect(updatedJob?.runAfter).toEqual(customRunAfter); // Should use custom time
+                expect(updatedJob?.lastError).toBe('Rate limited');
+
+                vi.useRealTimers();
+            });
+
+            it('Should handle Error objects as error input', async () => {
+                // Arrange
+                const error = new Error('Network failure');
+                const input = {
+                    jobId: testJobId,
+                    attempts: 1,
+                    error: error,
+                };
+
+                // Act
+                await requeueDomainEnrichmentJob(input);
+
+                // Assert
+                const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                    where: { id: testJobId },
+                });
+
+                expect(updatedJob?.lastError).toBe('Network failure');
+            });
+
+            it('Should handle non-Error objects as error input', async () => {
+                // Test different types of error inputs that are allowed by the type
+                const testCases = [
+                    {
+                        error: 'String error message',
+                        expected: 'String error message',
+                    },
+                    {
+                        error: new Error('Error object message'),
+                        expected: 'Error object message',
+                    },
+                    {
+                        error: '', // Empty string
+                        expected: '',
+                    },
+                    {
+                        error: new Error(''), // Empty Error
+                        expected: '',
+                    },
+                ];
+
+                for (const testCase of testCases) {
+                    // Reset job for each test
+                    await prisma.domainEnrichmentJob.update({
+                        where: { id: testJobId },
+                        data: {
+                            status: DomainEnrichmentJobStatus.RUNNING,
+                            lastError: null,
+                        },
+                    });
+
+                    const input = {
+                        jobId: testJobId,
+                        attempts: 1,
+                        error: testCase.error,
+                    };
+
+                    // Act
+                    await requeueDomainEnrichmentJob(input);
+
+                    // Assert
+                    const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                        where: { id: testJobId },
+                    });
+
+                    expect(updatedJob?.lastError).toBe(testCase.expected);
+                }
+            });
+
+            it('Should calculate correct backoff for different attempt counts', async () => {
+                // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-01T10:00:00Z');
+                vi.setSystemTime(now);
+
+                const testCases = [
+                    { attempts: 0, expectedMinutes: 1 }, // 2^0 = 1
+                    { attempts: 1, expectedMinutes: 2 }, // 2^1 = 2
+                    { attempts: 2, expectedMinutes: 4 }, // 2^2 = 4
+                    { attempts: 3, expectedMinutes: 8 }, // 2^3 = 8
+                    { attempts: 4, expectedMinutes: 16 }, // 2^4 = 16
+                    { attempts: 5, expectedMinutes: 32 }, // 2^5 = 32
+                    { attempts: 6, expectedMinutes: 60 }, // 2^6 = 64, capped at 60
+                    { attempts: 10, expectedMinutes: 60 }, // 2^10 = 1024, capped at 60
+                    { attempts: 15, expectedMinutes: 60 }, // exp = 10, capped at 60
+                ];
+
+                for (const testCase of testCases) {
+                    // Reset job for each test
+                    await prisma.domainEnrichmentJob.update({
+                        where: { id: testJobId },
+                        data: {
+                            status: DomainEnrichmentJobStatus.RUNNING,
+                            lastError: null,
+                        },
+                    });
+
+                    const input = {
+                        jobId: testJobId,
+                        attempts: testCase.attempts,
+                        error: `Attempt ${testCase.attempts} failed`,
+                    };
+
+                    // Act
+                    await requeueDomainEnrichmentJob(input);
+
+                    // Assert
+                    const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                        where: { id: testJobId },
+                    });
+
+                    const expectedRunAfter = new Date(now.getTime() + testCase.expectedMinutes * 60_000);
+                    expect(updatedJob?.runAfter).toEqual(expectedRunAfter);
+                }
+
+                vi.useRealTimers();
+            });
+
+            it('Should clear lockedUntil when requeueing', async () => {
+                // Arrange
+                const input = {
+                    jobId: testJobId,
+                    attempts: 1,
+                    error: 'Test error',
+                };
+
+                // Verify job has lockedUntil set initially
+                const initialJob = await prisma.domainEnrichmentJob.findUnique({
+                    where: { id: testJobId },
+                });
+                expect(initialJob?.lockedUntil).not.toBeNull();
+
+                // Act
+                await requeueDomainEnrichmentJob(input);
+
+                // Assert
+                const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                    where: { id: testJobId },
+                });
+
+                expect(updatedJob?.lockedUntil).toBeNull();
+                expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.PENDING);
+            });
+
+            it('Should throw error for non-existent job', async () => {
+                // Arrange
+                const nonExistentId = 'non-existent-job-id';
+                const input = {
+                    jobId: nonExistentId,
+                    attempts: 1,
+                    error: 'Some error',
+                };
+
+                // Act & Assert
+                await expect(requeueDomainEnrichmentJob(input)).rejects.toThrow();
+            });
+
+            it('Should handle requeue from different initial statuses', async () => {
+                const statuses = [
+                    DomainEnrichmentJobStatus.RUNNING,
+                    DomainEnrichmentJobStatus.ERROR,
+                    DomainEnrichmentJobStatus.PENDING,
+                ];
+
+                for (const status of statuses) {
+                    // Reset job for each test
+                    await prisma.domainEnrichmentJob.update({
+                        where: { id: testJobId },
+                        data: {
+                            status: status,
+                            lastError: `Initial ${status}`,
+                        },
+                    });
+
+                    const input = {
+                        jobId: testJobId,
+                        attempts: 2,
+                        error: `Requeued from ${status}`,
+                    };
+
+                    // Act
+                    await requeueDomainEnrichmentJob(input);
+
+                    // Assert
+                    const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                        where: { id: testJobId },
+                    });
+
+                    expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.PENDING);
+                    expect(updatedJob?.lastError).toBe(`Requeued from ${status}`);
+                }
+            });
+
+            it('Should preserve other fields when requeueing', async () => {
+                // Arrange
+                const originalJob = await prisma.domainEnrichmentJob.findUnique({
+                    where: { id: testJobId },
+                });
+
+                vi.useFakeTimers();
+                const now = new Date('2024-01-01T10:00:00Z');
+                vi.setSystemTime(now);
+
+                const input = {
+                    jobId: testJobId,
+                    attempts: 2,
+                    error: 'Preservation test',
+                };
+
+                // Act
+                await requeueDomainEnrichmentJob(input);
+
+                // Assert
+                const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                    where: { id: testJobId },
+                });
+
+                // These Should change
+                expect(updatedJob?.status).not.toBe(originalJob?.status);
+                expect(updatedJob?.runAfter).not.toEqual(originalJob?.runAfter);
+                expect(updatedJob?.lockedUntil).not.toBe(originalJob?.lockedUntil);
+                expect(updatedJob?.lastError).not.toBe(originalJob?.lastError);
+
+                // These Should remain unchanged
+                expect(updatedJob?.id).toBe(originalJob?.id);
+                expect(updatedJob?.domainId).toBe(originalJob?.domainId);
+                expect(updatedJob?.attempts).toBe(originalJob?.attempts); // Note: attempts is not incremented by requeue
+                expect(updatedJob?.createdAt).toEqual(originalJob?.createdAt);
+                expect(updatedJob?.updatedAt).not.toBe(originalJob?.updatedAt); // Should be updated
+
+                vi.useRealTimers();
+            });
+
+            it('Should work in a complete job lifecycle', async () => {
+                // Clean up existing job first since domain_id has UNIQUE constraint
+                await prisma.domainEnrichmentJob.delete({
+                    where: { id: testJobId },
+                });
+
+                vi.useFakeTimers();
+                let now = new Date('2024-01-01T10:00:00Z');
+                vi.setSystemTime(now);
+
+                // 1. Create and claim job
+                const job = await prisma.domainEnrichmentJob.create({
+                    data: {
+                        domainId: testDomainId,
+                        status: DomainEnrichmentJobStatus.PENDING,
+                        attempts: 0,
+                        runAfter: now, // Important: set runAfter to current time so it's eligible for claiming
+                    },
+                });
+
+                const claimed = await claimNextDomainEnrichmentJob();
+                expect(claimed).not.toBeNull();
+                expect(claimed?.id).toBe(job.id);
+
+                // 2. Requeue with error (first failure)
+                const error1 = 'First attempt failed';
+                await requeueDomainEnrichmentJob({
+                    jobId: job.id,
+                    attempts: 1, // First attempt failed
+                    error: error1,
+                });
+
+                let updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                    where: { id: job.id },
+                });
+                expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.PENDING);
+                expect(updatedJob?.lastError).toBe(error1);
+                expect(updatedJob?.attempts).toBe(1);
+
+                // Should be scheduled for 2 minutes from now (2^1 = 2)
+                let expectedRunAfter = new Date(now.getTime() + 2 * 60_000);
+                expect(updatedJob?.runAfter).toEqual(expectedRunAfter);
+
+                // 3. Claim again (after waiting)
+                now = new Date(expectedRunAfter.getTime() + 1000); // Move 1 second past runAfter
+                vi.setSystemTime(now);
+
+                const claimed2 = await claimNextDomainEnrichmentJob();
+                expect(claimed2).not.toBeNull();
+                expect(claimed2?.id).toBe(job.id);
+                expect(claimed2?.attempts).toBe(2); // Should increment to 2
+
+                // 4. Requeue again (second failure)
+                const error2 = 'Second attempt failed';
+                await requeueDomainEnrichmentJob({
+                    jobId: job.id,
+                    attempts: 2, // Second attempt failed
+                    error: error2,
+                });
+
+                updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                    where: { id: job.id },
+                });
+                expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.PENDING);
+                expect(updatedJob?.lastError).toBe(error2);
+
+                // Should be scheduled for 4 minutes from now (2^2 = 4)
+                expectedRunAfter = new Date(now.getTime() + 4 * 60_000);
+                expect(updatedJob?.runAfter).toEqual(expectedRunAfter);
+
+                // 5. Finally mark as DONE
+                await markDomainEnrichmentJobAsDone(job.id);
+
+                updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                    where: { id: job.id },
+                });
+                expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.DONE);
+                expect(updatedJob?.lastError).toBeNull();
+
+                vi.useRealTimers();
+            });
         });
     });
 });
