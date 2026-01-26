@@ -80,10 +80,13 @@ model DomainEnrichmentJob {
   attempts  Int                       @default(0)
   lastError String?                   @map("last_error")
 
+  lockedUntil DateTime? @map("locked_until")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   domain Domain @relation(fields: [domainId], references: [id])
 
+  @@index([lockedUntil])
   @@index([status, runAfter])
 }

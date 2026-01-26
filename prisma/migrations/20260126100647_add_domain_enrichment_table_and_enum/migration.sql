@@ -9,6 +9,7 @@ CREATE TABLE "DomainEnrichmentJob" (
     "run_after" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "attempts" INTEGER NOT NULL DEFAULT 0,
     "last_error" TEXT,
+    "locked_until" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -17,6 +18,9 @@ CREATE TABLE "DomainEnrichmentJob" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "DomainEnrichmentJob_domain_id_key" ON "DomainEnrichmentJob"("domain_id");
+
+-- CreateIndex
+CREATE INDEX "DomainEnrichmentJob_locked_until_idx" ON "DomainEnrichmentJob"("locked_until");
 
 -- CreateIndex
 CREATE INDEX "DomainEnrichmentJob_status_run_after_idx" ON "DomainEnrichmentJob"("status", "run_after");
