@@ -5,11 +5,9 @@ export type UpsertDomainEnrichmentJobInput = {
     status: DomainEnrichmentJobStatus;
 };
 
-export type NextDomainEnrichmentJob = {
+export type ClaimedDomainJob = {
     id: string;
-    attempts: number;
     domainId: string;
-    domain: {
-        hostname: string;
-    }
-}
+    hostname: string;
+    attempts: number;
+};

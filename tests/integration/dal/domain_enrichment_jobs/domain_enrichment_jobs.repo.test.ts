@@ -1,4 +1,4 @@
-import { describe, beforeEach, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
+import { describe, beforeEach, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
 import {
@@ -6,10 +6,8 @@ import {
     upsertDomainEnrichmentJob,
 } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
 
-
-describe("Domain Enrichment Jobs repository integration tests", () => {
-
-    describe('upsertDomainEnrichmentJob - Real Database Tests', () => {
+describe('Domain Enrichment Jobs repository integration tests', () => {
+    describe('Upsert Domain Enrichment job', () => {
         const testDomainId = 'test-integration-domain-id';
 
         beforeAll(async () => {
@@ -47,7 +45,7 @@ describe("Domain Enrichment Jobs repository integration tests", () => {
             });
         });
 
-        it('should create a new job when none exists', async () => {
+        it('Should create a new job when none exists', async () => {
             // Arrange
             const input = {
                 domainId: testDomainId,
@@ -70,7 +68,7 @@ describe("Domain Enrichment Jobs repository integration tests", () => {
             expect(job?.runAfter).toBeInstanceOf(Date);
         });
 
-        it('should update existing job with new status', async () => {
+        it('Should update existing job with new status', async () => {
             // Arrange - First create a job
             await prisma.domainEnrichmentJob.create({
                 data: {
@@ -93,11 +91,11 @@ describe("Domain Enrichment Jobs repository integration tests", () => {
             });
 
             expect(job?.status).toBe(DomainEnrichmentJobStatus.RUNNING);
-            // runAfter should be updated to current time
+            // runAfter Should be updated to current time
             expect(job?.runAfter).toBeInstanceOf(Date);
         });
 
-        it('should maintain attempts count when updating status', async () => {
+        it('Should maintain attempts count when updating status', async () => {
             // Arrange - Create job with attempts
             await prisma.domainEnrichmentJob.create({
                 data: {
@@ -122,12 +120,12 @@ describe("Domain Enrichment Jobs repository integration tests", () => {
             });
 
             expect(job?.status).toBe(DomainEnrichmentJobStatus.ERROR);
-            // attempts and lastError should remain unchanged
+            // attempts and lastError Should remain unchanged
             expect(job?.attempts).toBe(3);
             expect(job?.lastError).toBe('Previous error');
         });
 
-        it('should handle concurrent upserts', async () => {
+        it('Should handle concurrent upserts', async () => {
             // This test requires proper transaction handling in your implementation
             const input = {
                 domainId: testDomainId,
@@ -150,562 +148,500 @@ describe("Domain Enrichment Jobs repository integration tests", () => {
         });
     });
 
-    describe('claimNextDomainEnrichmentJob - Integration Tests', () => {
-        beforeEach(async () => {
-            // Clean up test data in correct order
-            await prisma.domainEnrichmentJob.deleteMany();
-            await prisma.domain.deleteMany();
+    describe('Claim next domain enrichhment job', () => {
+        let testDomainId1: string;
+        let testDomainId2: string;
+        let testDomainId3: string;
 
-            vi.useFakeTimers();
+        beforeAll(async () => {
+            // Create test domains
+            const domain1 = await prisma.domain.create({
+                data: {
+                    hostname: 'claim-test-1.example.com',
+                },
+            });
+            testDomainId1 = domain1.id;
+
+            const domain2 = await prisma.domain.create({
+                data: {
+                    hostname: 'claim-test-2.example.com',
+                },
+            });
+            testDomainId2 = domain2.id;
+
+            const domain3 = await prisma.domain.create({
+                data: {
+                    hostname: 'claim-test-3.example.com',
+                },
+            });
+            testDomainId3 = domain3.id;
         });
 
-        afterEach(async () => {
-            await prisma.domainEnrichmentJob.deleteMany();
-            await prisma.domain.deleteMany();
+        afterAll(async () => {
+            // Clean up all test data
+            await prisma.domainEnrichmentJob.deleteMany({
+                where: {
+                    domainId: {
+                        in: [testDomainId1, testDomainId2, testDomainId3],
+                    },
+                },
+            });
+            await prisma.domain.deleteMany({
+                where: {
+                    id: {
+                        in: [testDomainId1, testDomainId2, testDomainId3],
+                    },
+                },
+            });
+        });
+
+        beforeEach(async () => {
+            // Clear all jobs before each test
+            await prisma.domainEnrichmentJob.deleteMany({
+                where: {
+                    domainId: {
+                        in: [testDomainId1, testDomainId2, testDomainId3],
+                    },
+                },
+            });
+        });
+
+        it('Should claim the next PENDING job', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
+
+            // Create a PENDING job
+            const job = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: now,
+                    attempts: 0,
+                },
+            });
+
+            // Act
+            const claimed = await claimNextDomainEnrichmentJob();
+
+            // Assert
+            expect(claimed).not.toBeNull();
+            expect(claimed?.id).toBe(job.id);
+            expect(claimed?.domainId).toBe(testDomainId1);
+            expect(claimed?.hostname).toBe('claim-test-1.example.com');
+            expect(claimed?.attempts).toBe(1); // Should increment from 0 to 1
+
+            // Verify job was updated in database
+            const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                where: { id: job.id },
+            });
+
+            expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.RUNNING);
+            expect(updatedJob?.attempts).toBe(1);
+            expect(updatedJob?.lockedUntil).toBeInstanceOf(Date);
+            expect(updatedJob?.lockedUntil!.getTime()).toBe(now.getTime() + 2 * 60_000); // LEASE_MS = 2 minutes
 
             vi.useRealTimers();
         });
 
-        describe('Successful job claiming', () => {
-            it('should claim the oldest pending job with runAfter in the past', async () => {
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
+        it('Should claim the oldest runAfter job first', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
 
-                // Create a domain first
-                const domain = await prisma.domain.create({
-                    data: {
-                        hostname: 'example.com',
-                        firstSeenAt: new Date(),
-                    },
-                });
-
-                const domain2 = await prisma.domain.create({
-                    data: {
-                        hostname: 'example.net',
-                        firstSeenAt: new Date(),
-                    }
-                })
-
-                // Create pending jobs with different runAfter times
-                const job1 = await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: domain.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T09:00:00Z'), // 1 hour ago
-                        createdAt: new Date('2024-01-15T08:00:00Z'), // Oldest
-                    },
-                });
-
-                const job2 = await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: domain2.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T09:30:00Z'), // 30 minutes ago
-                        createdAt: new Date('2024-01-15T08:30:00Z'), // Newer
-                    },
-                });
-
-                // Act
-                const claimedJob = await claimNextDomainEnrichmentJob();
-
-                // Assert
-                expect(claimedJob).not.toBeNull();
-                expect(claimedJob?.id).toBe(job1.id); // Should claim the oldest job
-                expect(claimedJob?.domainId).toBe(domain.id);
-                expect(claimedJob?.domain.hostname).toBe('example.com');
-                expect(claimedJob?.attempts).toBe(1); // Attempts incremented
-
-                // Verify job status was updated to RUNNING
-                const updatedJob = await prisma.domainEnrichmentJob.findUnique({
-                    where: { id: job1.id },
-                });
-
-                expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.RUNNING);
-                expect(updatedJob?.attempts).toBe(1);
-                expect(updatedJob?.lastError).toBeNull();
-
-                // Second job should still be PENDING
-                const secondJob = await prisma.domainEnrichmentJob.findUnique({
-                    where: { id: job2.id },
-                });
-                expect(secondJob?.status).toBe(DomainEnrichmentJobStatus.PENDING);
+            // Create jobs with different runAfter times
+            await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: new Date('2024-01-01T11:00:00Z'), // Later
+                    attempts: 0,
+                },
             });
 
-            it('should increment attempts counter when claiming job', async () => {
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
-
-                const domain = await prisma.domain.create({
-                    data: {
-                        hostname: 'test.com',
-                        firstSeenAt: new Date(),
-                    },
-                });
-
-                // Create job with initial attempts
-                const job = await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: domain.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T09:00:00Z'),
-                        attempts: 2,
-                        lastError: 'Previous error',
-                    },
-                });
-
-                // Act
-                const claimedJob = await claimNextDomainEnrichmentJob();
-
-                // Assert
-                expect(claimedJob?.id).toBe(job.id);
-                expect(claimedJob?.attempts).toBe(3); // Incremented from 2 to 3
-                expect(claimedJob?.domain.hostname).toBe('test.com');
-
-                // Verify database state
-                const updatedJob = await prisma.domainEnrichmentJob.findUnique({
-                    where: { id: job.id },
-                });
-
-                expect(updatedJob?.attempts).toBe(3);
-                expect(updatedJob?.lastError).toBeNull(); // Should clear previous error
+            const job2 = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId2,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: new Date('2024-01-01T09:00:00Z'), // Earlier
+                    attempts: 0,
+                },
             });
 
-            it('should claim job with exact runAfter time', async () => {
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
+            // Act
+            const claimed = await claimNextDomainEnrichmentJob();
 
-                const domain = await prisma.domain.create({
-                    data: {
-                        hostname: 'exact-time.com',
-                        firstSeenAt: new Date(),
-                    },
-                });
+            // Assert - Should claim job2 because it has earlier runAfter
+            expect(claimed).not.toBeNull();
+            expect(claimed?.id).toBe(job2.id);
+            expect(claimed?.domainId).toBe(testDomainId2);
 
+            vi.useRealTimers();
+        });
+
+        it('Should not claim jobs with future runAfter', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
+
+            // Create job with future runAfter
+            await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: new Date('2024-01-01T11:00:00Z'), // 1 hour in future
+                    attempts: 0,
+                },
+            });
+
+            // Act
+            const claimed = await claimNextDomainEnrichmentJob();
+
+            // Assert
+            expect(claimed).toBeNull();
+
+            vi.useRealTimers();
+        });
+
+        it('Should claim stale RUNNING jobs (lockedUntil expired)', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
+
+            // Create a RUNNING job with expired lock
+            const job = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.RUNNING,
+                    runAfter: now,
+                    lockedUntil: new Date('2024-01-01T09:00:00Z'), // 1 hour ago (expired)
+                    attempts: 2,
+                },
+            });
+
+            // Act
+            const claimed = await claimNextDomainEnrichmentJob();
+
+            // Assert
+            expect(claimed).not.toBeNull();
+            expect(claimed?.id).toBe(job.id);
+            expect(claimed?.attempts).toBe(3); // Should increment from 2 to 3
+
+            // Verify job was updated
+            const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                where: { id: job.id },
+            });
+
+            expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.RUNNING);
+            expect(updatedJob?.attempts).toBe(3);
+            expect(updatedJob?.lockedUntil!.getTime()).toBe(now.getTime() + 2 * 60_000);
+
+            vi.useRealTimers();
+        });
+
+        it('Should not claim fresh RUNNING jobs (lockedUntil not expired)', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
+
+            // Create a RUNNING job with active lock
+            await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.RUNNING,
+                    runAfter: now,
+                    lockedUntil: new Date('2024-01-01T11:00:00Z'), // 1 hour in future (not expired)
+                    attempts: 2,
+                },
+            });
+
+            // Act
+            const claimed = await claimNextDomainEnrichmentJob();
+
+            // Assert
+            expect(claimed).toBeNull();
+
+            vi.useRealTimers();
+        });
+
+        it('Should not claim jobs with status other than PENDING or stale RUNNING', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
+
+            const statuses = [
+                DomainEnrichmentJobStatus.ERROR,
+                DomainEnrichmentJobStatus.DONE,
+                DomainEnrichmentJobStatus.ERROR,
+            ];
+
+            for (const status of statuses) {
                 await prisma.domainEnrichmentJob.create({
                     data: {
-                        domainId: domain.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: now, // Exact same time as now
+                        domainId: testDomainId1,
+                        status,
+                        runAfter: now,
+                        attempts: 0,
                     },
                 });
 
                 // Act
-                const claimedJob = await claimNextDomainEnrichmentJob();
+                const claimed = await claimNextDomainEnrichmentJob();
 
                 // Assert
-                expect(claimedJob).not.toBeNull();
-                expect(claimedJob?.domain.hostname).toBe('exact-time.com');
-            });
+                expect(claimed).toBeNull();
 
-            it('should include domain hostname in returned job', async () => {
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
-
-                const domain = await prisma.domain.create({
-                    data: {
-                        hostname: 'included-hostname.com',
-                        firstSeenAt: new Date(),
-                    },
+                // Clean for next iteration
+                await prisma.domainEnrichmentJob.deleteMany({
+                    where: { domainId: testDomainId1 },
                 });
+            }
 
-                await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: domain.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T09:00:00Z'),
-                    },
-                });
-
-                // Act
-                const claimedJob = await claimNextDomainEnrichmentJob();
-
-                // Assert
-                expect(claimedJob?.domain.hostname).toBe('included-hostname.com');
-                expect(claimedJob?.domainId).toBe(domain.id);
-            });
+            vi.useRealTimers();
         });
 
-        describe('No jobs to claim', () => {
-            it('should return null when no pending jobs exist', async () => {
-                // Arrange - No jobs created
-                // Act
-                const result = await claimNextDomainEnrichmentJob();
+        it('Should return null when no jobs available', async () => {
+            // Act
+            const claimed = await claimNextDomainEnrichmentJob();
 
-                // Assert
-                expect(result).toBeNull();
-            });
-
-            it('should return null when all jobs have future runAfter dates', async () => {
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
-
-                const domain = await prisma.domain.create({
-                    data: {
-                        hostname: 'future.com',
-                        firstSeenAt: new Date(),
-                    },
-                });
-
-                await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: domain.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T11:00:00Z'), // 1 hour in future
-                    },
-                });
-
-                // Act
-                const result = await claimNextDomainEnrichmentJob();
-
-                // Assert
-                expect(result).toBeNull();
-            });
-
-            it('should return null when only non-PENDING jobs exist', async () => {
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
-
-                // Create different domains for each job since domainId is unique
-                const domains = [
-                    { hostname: 'running-domain.com' },
-                    { hostname: 'done-domain.com' },
-                    { hostname: 'error-domain.com' },
-                ];
-
-                const statuses = [
-                    DomainEnrichmentJobStatus.RUNNING,
-                    DomainEnrichmentJobStatus.DONE,
-                    DomainEnrichmentJobStatus.ERROR,
-                ];
-
-                for (let i = 0; i < statuses.length; i++) {
-                    const domain = await prisma.domain.create({
-                        data: {
-                            hostname: domains[i].hostname,
-                            firstSeenAt: new Date(),
-                        },
-                    });
-
-                    await prisma.domainEnrichmentJob.create({
-                        data: {
-                            domainId: domain.id,
-                            status: statuses[i],
-                            runAfter: new Date('2024-01-15T09:00:00Z'), // In the past
-                        },
-                    });
-                }
-
-                // Act
-                const result = await claimNextDomainEnrichmentJob();
-
-                // Assert
-                expect(result).toBeNull();
-            });
-
-            it('should return null when job is already claimed by another process', async () => {
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
-
-                const domain = await prisma.domain.create({
-                    data: {
-                        hostname: 'race-condition.com',
-                        firstSeenAt: new Date(),
-                    },
-                });
-
-                const job = await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: domain.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T09:00:00Z'),
-                    },
-                });
-
-                // Simulate another process claiming the job first
-                await prisma.domainEnrichmentJob.update({
-                    where: { id: job.id },
-                    data: { status: DomainEnrichmentJobStatus.RUNNING },
-                });
-
-                // Act
-                const result = await claimNextDomainEnrichmentJob();
-
-                // Assert
-                expect(result).toBeNull();
-            });
+            // Assert
+            expect(claimed).toBeNull();
         });
 
-        describe('Concurrent job claiming', () => {
-            it('should handle concurrent claims gracefully', async () => {
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
+        it('Should handle concurrent claims correctly (only one gets it)', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
 
-                const domain = await prisma.domain.create({
-                    data: {
-                        hostname: 'concurrent.com',
-                        firstSeenAt: new Date(),
-                    },
-                });
-
-                // Create a single job
-                const job = await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: domain.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T09:00:00Z'),
-                    },
-                });
-
-                // Act - Simulate concurrent claims
-                const promises = Array.from({ length: 5 }, () => claimNextDomainEnrichmentJob());
-
-                const results = await Promise.all(promises);
-
-                // Assert - Only one claim should succeed
-                const successfulClaims = results.filter((r) => r !== null);
-                expect(successfulClaims).toHaveLength(1);
-
-                const failedClaims = results.filter((r) => r === null);
-                expect(failedClaims).toHaveLength(4);
-
-                // Verify job is now RUNNING
-                const updatedJob = await prisma.domainEnrichmentJob.findUnique({
-                    where: { id: job.id },
-                });
-                expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.RUNNING);
-                expect(updatedJob?.attempts).toBe(1);
+            // Create a single job
+            const job = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: now,
+                    attempts: 0,
+                },
             });
 
-            it('should only claim PENDING jobs that are still PENDING during update', async () => {
-                // This tests the atomicity of the update operation
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
+            // Act - Try to claim concurrently
+            const claimPromises = Array(5)
+                .fill(null)
+                .map(() => claimNextDomainEnrichmentJob());
 
-                const domain = await prisma.domain.create({
-                    data: {
-                        hostname: 'atomic-test.com',
-                        firstSeenAt: new Date(),
-                    },
-                });
+            const results = await Promise.all(claimPromises);
 
-                const domain2 = await prisma.domain.create({
-                    data: {
-                        hostname: 'atomic-test-2.com',
-                        firstSeenAt: new Date(),
-                    },
-                });
+            // Assert - Only one Should get the job
+            const successfulClaims = results.filter((result) => result !== null);
+            expect(successfulClaims).toHaveLength(1);
 
-                const job1 = await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: domain.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T09:00:00Z'),
-                        createdAt: new Date('2024-01-15T08:00:00Z'),
-                    },
-                });
+            if (successfulClaims[0]) {
+                expect(successfulClaims[0].id).toBe(job.id);
+            }
 
-                const job2 = await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: domain2.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T09:30:00Z'),
-                        createdAt: new Date('2024-01-15T08:30:00Z'),
-                    },
-                });
-
-                // Manually change job1 status to simulate another process
-                await prisma.domainEnrichmentJob.update({
-                    where: { id: job1.id },
-                    data: { status: DomainEnrichmentJobStatus.RUNNING },
-                });
-
-                // Act
-                const claimedJob = await claimNextDomainEnrichmentJob();
-
-                // Assert - Should claim job2 since job1 is no longer PENDING
-                expect(claimedJob?.id).toBe(job2.id);
+            // Verify job is now RUNNING
+            const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                where: { id: job.id },
             });
+            expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.RUNNING);
+            expect(updatedJob?.attempts).toBe(1);
+
+            vi.useRealTimers();
         });
 
-        describe('Job ordering', () => {
-            it('should claim jobs in chronological order by createdAt', async () => {
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
+        it('Should order by runAfter then createdAt', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
 
-                // Create domains for each job
-                const jobs = [
-                    {
-                        createdAt: '2024-01-15T07:00:00Z',
-                        hostname: 'oldest-job.com',
-                        id: '',
-                    },
-                    {
-                        createdAt: '2024-01-15T08:00:00Z',
-                        hostname: 'middle-job.com',
-                        id: '',
-                    },
-                    {
-                        createdAt: '2024-01-15T09:00:00Z',
-                        hostname: 'newest-job.com',
-                        id: '',
-                    },
-                ];
-
-                for (const job of jobs) {
-                    const domain = await prisma.domain.create({
-                        data: {
-                            hostname: job.hostname,
-                            firstSeenAt: new Date(),
-                        },
-                    });
-
-                    const createdJob = await prisma.domainEnrichmentJob.create({
-                        data: {
-                            domainId: domain.id,
-                            status: DomainEnrichmentJobStatus.PENDING,
-                            runAfter: new Date('2024-01-15T09:00:00Z'),
-                            createdAt: new Date(job.createdAt),
-                        },
-                    });
-                    job.id = createdJob.id;
-                }
-
-                // Act & Assert - Claim first job (oldest)
-                const firstClaim = await claimNextDomainEnrichmentJob();
-                expect(firstClaim?.id).toBe(jobs[0].id);
-
-                // Update first job to DONE (not DONE - check your enum)
-                await prisma.domainEnrichmentJob.update({
-                    where: { id: jobs[0].id },
-                    data: { status: DomainEnrichmentJobStatus.DONE },
-                });
-
-                // Claim second job (middle)
-                const secondClaim = await claimNextDomainEnrichmentJob();
-                expect(secondClaim?.id).toBe(jobs[1].id);
-
-                // Update second job to DONE
-                await prisma.domainEnrichmentJob.update({
-                    where: { id: jobs[1].id },
-                    data: { status: DomainEnrichmentJobStatus.DONE },
-                });
-
-                // Claim third job (newest)
-                const thirdClaim = await claimNextDomainEnrichmentJob();
-                expect(thirdClaim?.id).toBe(jobs[2].id);
+            // Create jobs with same runAfter but different createdAt
+            const job1 = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: now,
+                    attempts: 0,
+                    createdAt: new Date('2024-01-01T08:00:00Z'), // Earlier
+                },
             });
 
-            it('should prioritize older jobs even with later runAfter times', async () => {
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
-
-                const domain = await prisma.domain.create({
-                    data: {
-                        hostname: 'priority.com',
-                        firstSeenAt: new Date(),
-                    },
-                });
-
-                const secondDomain = await prisma.domain.create({
-                    data: {
-                        hostname: 'priority-level-2.com',
-                        firstSeenAt: new Date(),
-                    },
-                });
-
-
-
-                // Older job with later runAfter
-                const olderJob = await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: domain.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T10:30:00Z'), // In future
-                        createdAt: new Date('2024-01-15T08:00:00Z'), // Older
-                    },
-                });
-
-                // Newer job with earlier runAfter (eligible now)
-                const newerJob = await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: secondDomain.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T09:00:00Z'), // In past
-                        createdAt: new Date('2024-01-15T09:00:00Z'), // Newer
-                    },
-                });
-
-                // Act
-                const claimedJob = await claimNextDomainEnrichmentJob();
-
-                // Assert - Should claim newer job because older job's runAfter is in future
-                expect(claimedJob?.id).toBe(newerJob.id);
-
-                // Move time forward to make older job eligible
-                vi.setSystemTime(new Date('2024-01-15T10:45:00Z'));
-
-                // Complete the first job
-                await prisma.domainEnrichmentJob.update({
-                    where: { id: newerJob.id },
-                    data: { status: DomainEnrichmentJobStatus.DONE },
-                });
-
-                // Act - Claim next job
-                const secondClaim = await claimNextDomainEnrichmentJob();
-
-                // Assert - Now should claim the older job
-                expect(secondClaim?.id).toBe(olderJob.id);
+            await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId2,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: now,
+                    attempts: 0,
+                    createdAt: new Date('2024-01-01T09:00:00Z'), // Later
+                },
             });
+
+            // Act
+            const claimed = await claimNextDomainEnrichmentJob();
+
+            // Assert - Should claim job1 because it has earlier createdAt
+            expect(claimed).not.toBeNull();
+            expect(claimed?.id).toBe(job1.id);
+
+            vi.useRealTimers();
         });
 
-        describe('Error scenarios', () => {
-            it('should clear lastError when claiming a previously failed job', async () => {
-                // Arrange
-                const now = new Date('2024-01-15T10:00:00Z');
-                vi.setSystemTime(now);
+        it('Should increment attempts count', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
 
-                const domain = await prisma.domain.create({
-                    data: {
-                        hostname: 'retry.com',
-                        firstSeenAt: new Date(),
-                    },
-                });
-
-                const job = await prisma.domainEnrichmentJob.create({
-                    data: {
-                        domainId: domain.id,
-                        status: DomainEnrichmentJobStatus.PENDING,
-                        runAfter: new Date('2024-01-15T09:00:00Z'),
-                        attempts: 1,
-                        lastError: 'Previous failure: Connection timeout',
-                    },
-                });
-
-                // Act
-                const claimedJob = await claimNextDomainEnrichmentJob();
-
-                // Assert
-                expect(claimedJob).not.toBeNull();
-
-                // Verify error was cleared in database
-                const updatedJob = await prisma.domainEnrichmentJob.findUnique({
-                    where: { id: job.id },
-                });
-
-                expect(updatedJob?.lastError).toBeNull();
+            const job = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: now,
+                    attempts: 3,
+                },
             });
+
+            // Act
+            const claimed = await claimNextDomainEnrichmentJob();
+
+            // Assert
+            expect(claimed).not.toBeNull();
+            expect(claimed?.attempts).toBe(4); // 3 + 1
+
+            // Verify in database
+            const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                where: { id: job.id },
+            });
+            expect(updatedJob?.attempts).toBe(4);
+
+            vi.useRealTimers();
+        });
+
+        it('Should clear lastError when claiming', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
+
+            const job = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: now,
+                    attempts: 2,
+                    lastError: 'Previous error message',
+                },
+            });
+
+            // Act
+            const claimed = await claimNextDomainEnrichmentJob();
+
+            // Assert
+            expect(claimed).not.toBeNull();
+
+            // Verify lastError was cleared
+            const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                where: { id: job.id },
+            });
+            expect(updatedJob?.lastError).toBeNull();
+
+            vi.useRealTimers();
+        });
+
+        it('Should handle race condition when job is claimed between findFirst and updateMany', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
+
+            // Create a job
+            const job = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: now,
+                    attempts: 0,
+                },
+            });
+
+            // Simulate another process claiming the job
+            await prisma.domainEnrichmentJob.update({
+                where: { id: job.id },
+                data: {
+                    status: DomainEnrichmentJobStatus.RUNNING,
+                    lockedUntil: new Date(now.getTime() + 2 * 60_000),
+                },
+            });
+
+            // Act - Try to claim the already-claimed job
+            const claimed = await claimNextDomainEnrichmentJob();
+
+            // Assert - Should return null because job is no longer claimable
+            expect(claimed).toBeNull();
+
+            vi.useRealTimers();
+        });
+
+        it('Should claim job with STALE_GRACE_MS = 0 (immediate staleness)', async () => {
+            // Arrange - STALE_GRACE_MS = 0 means any lockedUntil in the past is stale
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
+
+            // Create a RUNNING job with lock that expired 1 millisecond ago
+            const job = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.RUNNING,
+                    runAfter: now,
+                    lockedUntil: new Date(now.getTime() - 1), // 1ms ago
+                    attempts: 1,
+                },
+            });
+
+            // Act
+            const claimed = await claimNextDomainEnrichmentJob();
+
+            // Assert - Should claim the stale job
+            expect(claimed).not.toBeNull();
+            expect(claimed?.id).toBe(job.id);
+
+            vi.useRealTimers();
+        });
+
+        it('Should return proper ClaimedDomainJob object structure', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
+
+            const job = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId1,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: now,
+                    attempts: 0,
+                },
+            });
+
+            // Act
+            const claimed = await claimNextDomainEnrichmentJob();
+
+            // Assert
+            expect(claimed).toEqual({
+                id: job.id,
+                domainId: testDomainId1,
+                hostname: 'claim-test-1.example.com',
+                attempts: 1,
+            });
+
+            vi.useRealTimers();
         });
     });
-
 });
