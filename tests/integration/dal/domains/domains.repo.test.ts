@@ -10,6 +10,7 @@ import {
 } from '@/dal/domains/domains.repo';
 import { DomainSource, DomainStatus } from '@/generated/prisma/enums';
 import { RdapDomainParams, RdapStatus } from '@/lib/rdap/rdap.types';
+import { WhoisStatus } from '@/lib/whois/whois.types';
 
 const mockedUtils = vi.hoisted(() => ({
     normalizeHostnameFromUrl: vi.fn(),
@@ -99,6 +100,7 @@ describe('updateDomainRdap integration tests', () => {
                 checkedAt: null,
                 rdapFetchedAt: null,
                 rdapRaw: undefined,
+                rdapFetchLockedUntil: null,
             },
         });
 
@@ -386,6 +388,8 @@ describe('updateDomainRdap integration tests', () => {
                     firstSeenAt: new Date(),
                     source: DomainSource.UNKNOWN,
                     status: DomainStatus.UNKNOWN,
+                    rdapFetchLockedUntil: null,
+                    whoisFetchLockedUntil: null,
                 },
             });
 
@@ -397,8 +401,12 @@ describe('updateDomainRdap integration tests', () => {
         });
 
         describe('updateDomainRdapCache', () => {
-            it('should update RDAP cache fields', async () => {
+            it('should update RDAP cache fields with locked until date for OK status', async () => {
                 // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T10:30:00Z');
+                vi.setSystemTime(now);
+
                 const rdapFetchedAt = new Date('2024-01-15T10:30:00Z');
                 const rdapRaw = {
                     events: [{ eventAction: 'registration', eventDate: '2023-01-01T00:00:00Z' }],
@@ -407,6 +415,7 @@ describe('updateDomainRdap integration tests', () => {
 
                 const input = {
                     domainId: testDomainId,
+                    status: RdapStatus.OK,
                     rdapFetchedAt,
                     rdapRaw,
                 };
@@ -422,11 +431,72 @@ describe('updateDomainRdap integration tests', () => {
                 expect(updatedDomain?.rdapFetchedAt).toEqual(rdapFetchedAt);
                 expect(updatedDomain?.rdapRaw).toEqual(rdapRaw);
 
+                // Verify locked until date is set correctly for OK status (30 days)
+                const expectedLockedUntil = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                expect(updatedDomain?.rdapFetchLockedUntil).toEqual(expectedLockedUntil);
+
                 // Verify other fields are unchanged
                 expect(updatedDomain?.whoisFetchedAt).toBeNull();
                 expect(updatedDomain?.whoisRaw).toBeNull();
                 expect(updatedDomain?.registeredAt).toBeNull();
                 expect(updatedDomain?.source).toBe(DomainSource.UNKNOWN);
+
+                vi.useRealTimers();
+            });
+
+            it('should calculate different locked until dates for different statuses', async () => {
+                // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T10:30:00Z');
+                vi.setSystemTime(now);
+
+                const testCases = [
+                    { status: RdapStatus.OK, expectedDays: 30 },
+                    { status: RdapStatus.REDACTED, expectedDays: 14 },
+                    { status: RdapStatus.MISSING, expectedDays: 7 },
+                    { status: RdapStatus.ERROR, expectedMinutes: 60 },
+                    { status: RdapStatus.UNSUPPORTED, expectedDays: 180 },
+                ];
+
+                for (const testCase of testCases) {
+                    // Reset domain for each test
+                    await prisma.domain.update({
+                        where: { id: testDomainId },
+                        data: {
+                            rdapFetchLockedUntil: null,
+                        },
+                    });
+
+                    const input = {
+                        domainId: testDomainId,
+                        status: testCase.status,
+                        rdapFetchedAt: now,
+                        rdapRaw: { test: 'data' },
+                    };
+
+                    // Act
+                    await updateDomainRdapCache(input);
+
+                    // Assert
+                    const updatedDomain = await prisma.domain.findUnique({
+                        where: { id: testDomainId },
+                    });
+
+                    const lockedUntil = updatedDomain?.rdapFetchLockedUntil;
+                    expect(lockedUntil).toBeInstanceOf(Date);
+
+                    if ('expectedDays' in testCase) {
+                        const expectedDate = new Date(
+                            now.getTime() + (testCase.expectedDays ?? 1) * 24 * 60 * 60 * 1000
+                        );
+                        expect(lockedUntil).toEqual(expectedDate);
+                    } else if ('expectedMinutes' in testCase) {
+                        const expectedDate = new Date(now.getTime() + (testCase.expectedMinutes ?? 1) * 60 * 1000);
+                        expect(lockedUntil).toEqual(expectedDate);
+                    }
+                }
+
+                vi.useRealTimers();
             });
 
             it('should update only RDAP fields and preserve others', async () => {
@@ -439,14 +509,20 @@ describe('updateDomainRdap integration tests', () => {
                         registeredAt: new Date('2023-01-01T00:00:00Z'),
                         source: DomainSource.WHOIS,
                         status: DomainStatus.OK,
+                        whoisFetchLockedUntil: new Date('2024-02-14T10:30:00Z'),
                     },
                 });
+
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T11:30:00Z');
+                vi.setSystemTime(now);
 
                 const rdapFetchedAt = new Date('2024-01-15T11:30:00Z');
                 const rdapRaw = { events: [] };
 
                 const input = {
                     domainId: testDomainId,
+                    status: RdapStatus.REDACTED,
                     rdapFetchedAt,
                     rdapRaw,
                 };
@@ -461,20 +537,30 @@ describe('updateDomainRdap integration tests', () => {
 
                 expect(updatedDomain?.rdapFetchedAt).toEqual(rdapFetchedAt);
                 expect(updatedDomain?.rdapRaw).toEqual(rdapRaw);
+                expect(updatedDomain?.rdapFetchLockedUntil).toBeInstanceOf(Date);
 
                 // Verify other fields are preserved
                 expect(updatedDomain?.whoisFetchedAt).toBeInstanceOf(Date);
                 expect(updatedDomain?.whoisRaw).toBe('WHOIS data');
+                expect(updatedDomain?.whoisFetchLockedUntil).toBeInstanceOf(Date);
                 expect(updatedDomain?.registeredAt).toBeInstanceOf(Date);
                 expect(updatedDomain?.source).toBe(DomainSource.WHOIS);
                 expect(updatedDomain?.status).toBe(DomainStatus.OK);
+
+                vi.useRealTimers();
             });
 
             it('should set rdapFetchedAt to null', async () => {
                 // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T10:30:00Z');
+                vi.setSystemTime(now);
+
                 const input = {
                     domainId: testDomainId,
+                    status: RdapStatus.OK,
                     rdapFetchedAt: undefined,
+                    rdapRaw: undefined,
                 };
 
                 // Act
@@ -487,10 +573,17 @@ describe('updateDomainRdap integration tests', () => {
 
                 expect(updatedDomain?.rdapFetchedAt).toBeNull();
                 expect(updatedDomain?.rdapRaw).toBeNull();
+                expect(updatedDomain?.rdapFetchLockedUntil).toBeInstanceOf(Date);
+
+                vi.useRealTimers();
             });
 
             it('should handle complex RDAP JSON data', async () => {
                 // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T10:30:00Z');
+                vi.setSystemTime(now);
+
                 const complexRdapData = {
                     events: [
                         { eventAction: 'registration', eventDate: '2023-01-01T00:00:00Z' },
@@ -514,6 +607,7 @@ describe('updateDomainRdap integration tests', () => {
 
                 const input = {
                     domainId: testDomainId,
+                    status: RdapStatus.OK,
                     rdapFetchedAt: new Date(),
                     rdapRaw: complexRdapData,
                 };
@@ -527,6 +621,7 @@ describe('updateDomainRdap integration tests', () => {
                 });
 
                 expect(updatedDomain?.rdapRaw).toEqual(complexRdapData);
+                expect(updatedDomain?.rdapFetchLockedUntil).toBeInstanceOf(Date);
 
                 const rdapData = updatedDomain?.rdapRaw as RdapData | null;
 
@@ -534,25 +629,38 @@ describe('updateDomainRdap integration tests', () => {
                     expect(rdapData.events).toHaveLength(2);
                     expect(rdapData.entities).toHaveLength(1);
                 }
+
+                vi.useRealTimers();
             });
 
             it('should throw error for non-existent domain', async () => {
                 // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T10:30:00Z');
+                vi.setSystemTime(now);
+
                 const nonExistentId = 'non-existent-id';
                 const input = {
                     domainId: nonExistentId,
+                    status: RdapStatus.OK,
                     rdapFetchedAt: new Date(),
                     rdapRaw: { test: 'data' },
                 };
 
                 // Act & Assert
                 await expect(updateDomainRdapCache(input)).rejects.toThrow();
+
+                vi.useRealTimers();
             });
         });
 
         describe('updateDomainWhoisCache', () => {
-            it('should update WHOIS cache fields', async () => {
+            it('should update WHOIS cache fields with locked until date for OK status', async () => {
                 // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T10:30:00Z');
+                vi.setSystemTime(now);
+
                 const whoisFetchedAt = new Date('2024-01-15T10:30:00Z');
                 const whoisRaw = `Domain Name: TEST-DOMAIN.COM
 Creation Date: 2023-01-01T00:00:00Z
@@ -560,6 +668,7 @@ Registrar: Example Registrar, Inc.`;
 
                 const input = {
                     domainId: testDomainId,
+                    status: WhoisStatus.OK,
                     whoisFetchedAt,
                     whoisRaw,
                 };
@@ -575,10 +684,69 @@ Registrar: Example Registrar, Inc.`;
                 expect(updatedDomain?.whoisFetchedAt).toEqual(whoisFetchedAt);
                 expect(updatedDomain?.whoisRaw).toBe(whoisRaw);
 
+                // Verify locked until date is set correctly for OK status (90 days for WHOIS)
+                const expectedLockedUntil = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+                expect(updatedDomain?.whoisFetchLockedUntil).toEqual(expectedLockedUntil);
+
                 // Verify other fields are unchanged
                 expect(updatedDomain?.rdapFetchedAt).toBeNull();
                 expect(updatedDomain?.rdapRaw).toBeNull();
                 expect(updatedDomain?.registeredAt).toBeNull();
+
+                vi.useRealTimers();
+            });
+
+            it('should calculate different locked until dates for different statuses in WHOIS', async () => {
+                // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T10:30:00Z');
+                vi.setSystemTime(now);
+
+                const testCases = [
+                    { status: WhoisStatus.OK, expectedDays: 90 },
+                    { status: WhoisStatus.REDACTED, expectedDays: 30 },
+                    { status: WhoisStatus.MISSING, expectedDays: 30 },
+                    { status: WhoisStatus.ERROR, expectedMinutes: 360 },
+                    { status: WhoisStatus.UNSUPPORTED, expectedDays: 365 },
+                ];
+
+                for (const testCase of testCases) {
+                    // Reset domain for each test
+                    await prisma.domain.update({
+                        where: { id: testDomainId },
+                        data: {
+                            whoisFetchLockedUntil: null,
+                        },
+                    });
+
+                    const input = {
+                        domainId: testDomainId,
+                        status: testCase.status,
+                        whoisFetchedAt: now,
+                        whoisRaw: `Test data for ${testCase.status}`,
+                    };
+
+                    // Act
+                    await updateDomainWhoisCache(input);
+
+                    // Assert
+                    const updatedDomain = await prisma.domain.findUnique({
+                        where: { id: testDomainId },
+                    });
+
+                    const lockedUntil = updatedDomain?.whoisFetchLockedUntil;
+                    expect(lockedUntil).toBeInstanceOf(Date);
+
+                    if ('expectedDays' in testCase) {
+                        const expectedDate = new Date(now.getTime() + (testCase.expectedDays ?? 1) * 24 * 60 * 60 * 1000);
+                        expect(lockedUntil).toEqual(expectedDate);
+                    } else if ('expectedMinutes' in testCase) {
+                        const expectedDate = new Date(now.getTime() + (testCase.expectedMinutes ?? 1) * 60 * 1000);
+                        expect(lockedUntil).toEqual(expectedDate);
+                    }
+                }
+
+                vi.useRealTimers();
             });
 
             it('should update only WHOIS fields and preserve others', async () => {
@@ -591,14 +759,20 @@ Registrar: Example Registrar, Inc.`;
                         registeredAt: new Date('2023-01-01T00:00:00Z'),
                         source: DomainSource.RDAP,
                         status: DomainStatus.OK,
+                        rdapFetchLockedUntil: new Date('2024-02-14T10:30:00Z'),
                     },
                 });
+
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T11:30:00Z');
+                vi.setSystemTime(now);
 
                 const whoisFetchedAt = new Date('2024-01-15T11:30:00Z');
                 const whoisRaw = 'Updated WHOIS data';
 
                 const input = {
                     domainId: testDomainId,
+                    status: WhoisStatus.REDACTED,
                     whoisFetchedAt,
                     whoisRaw,
                 };
@@ -613,19 +787,28 @@ Registrar: Example Registrar, Inc.`;
 
                 expect(updatedDomain?.whoisFetchedAt).toEqual(whoisFetchedAt);
                 expect(updatedDomain?.whoisRaw).toBe(whoisRaw);
+                expect(updatedDomain?.whoisFetchLockedUntil).toBeInstanceOf(Date);
 
                 // Verify other fields are preserved
                 expect(updatedDomain?.rdapFetchedAt).toBeInstanceOf(Date);
                 expect(updatedDomain?.rdapRaw).toEqual({ events: [] });
+                expect(updatedDomain?.rdapFetchLockedUntil).toBeInstanceOf(Date);
                 expect(updatedDomain?.registeredAt).toBeInstanceOf(Date);
                 expect(updatedDomain?.source).toBe(DomainSource.RDAP);
                 expect(updatedDomain?.status).toBe(DomainStatus.OK);
+
+                vi.useRealTimers();
             });
 
             it('should set whoisFetchedAt and whoisRaw to null', async () => {
                 // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T10:30:00Z');
+                vi.setSystemTime(now);
+
                 const input = {
                     domainId: testDomainId,
+                    status: WhoisStatus.OK,
                     whoisFetchedAt: undefined,
                     whoisRaw: undefined,
                 };
@@ -640,10 +823,17 @@ Registrar: Example Registrar, Inc.`;
 
                 expect(updatedDomain?.whoisFetchedAt).toBeNull();
                 expect(updatedDomain?.whoisRaw).toBeNull();
+                expect(updatedDomain?.whoisFetchLockedUntil).toBeInstanceOf(Date);
+
+                vi.useRealTimers();
             });
 
             it('should handle large WHOIS text', async () => {
                 // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T10:30:00Z');
+                vi.setSystemTime(now);
+
                 const largeWhoisText = Array(100)
                     .fill(0)
                     .map((_, i) => `Line ${i + 1}: Some WHOIS data`)
@@ -651,6 +841,7 @@ Registrar: Example Registrar, Inc.`;
 
                 const input = {
                     domainId: testDomainId,
+                    status: WhoisStatus.OK,
                     whoisFetchedAt: new Date(),
                     whoisRaw: largeWhoisText,
                 };
@@ -665,12 +856,20 @@ Registrar: Example Registrar, Inc.`;
 
                 expect(updatedDomain?.whoisRaw).toBe(largeWhoisText);
                 expect(updatedDomain?.whoisRaw?.length).toBeGreaterThan(1000);
+                expect(updatedDomain?.whoisFetchLockedUntil).toBeInstanceOf(Date);
+
+                vi.useRealTimers();
             });
 
             it('should handle empty WHOIS string', async () => {
                 // Arrange
+                vi.useFakeTimers();
+                const now = new Date('2024-01-15T10:30:00Z');
+                vi.setSystemTime(now);
+
                 const input = {
                     domainId: testDomainId,
+                    status: WhoisStatus.OK,
                     whoisFetchedAt: new Date(),
                     whoisRaw: '',
                 };
@@ -684,6 +883,9 @@ Registrar: Example Registrar, Inc.`;
                 });
 
                 expect(updatedDomain?.whoisRaw).toBe('');
+                expect(updatedDomain?.whoisFetchLockedUntil).toBeInstanceOf(Date);
+
+                vi.useRealTimers();
             });
         });
 
@@ -730,6 +932,8 @@ Registrar: Example Registrar, Inc.`;
                         rdapRaw: { events: [] },
                         whoisFetchedAt: new Date('2024-01-14T11:30:00Z'),
                         whoisRaw: 'WHOIS data',
+                        rdapFetchLockedUntil: new Date('2024-02-14T10:30:00Z'),
+                        whoisFetchLockedUntil: new Date('2024-02-14T11:30:00Z'),
                     },
                 });
 
@@ -759,6 +963,8 @@ Registrar: Example Registrar, Inc.`;
                 expect(updatedDomain?.rdapRaw).toEqual({ events: [] });
                 expect(updatedDomain?.whoisFetchedAt).toBeInstanceOf(Date);
                 expect(updatedDomain?.whoisRaw).toBe('WHOIS data');
+                expect(updatedDomain?.rdapFetchLockedUntil).toBeInstanceOf(Date);
+                expect(updatedDomain?.whoisFetchLockedUntil).toBeInstanceOf(Date);
             });
 
             it('should set registeredAt to null', async () => {
@@ -868,14 +1074,6 @@ Registrar: Example Registrar, Inc.`;
 
                 vi.useRealTimers();
             });
-
-            it('should perform partial update when only some fields are provided', async () => {
-                // Note: This depends on how Prisma handles partial updates
-                // In your implementation, all fields are required in the input type
-                // So this test might not be applicable
-                // If you want to support partial updates, you would need to change
-                // the input type to make fields optional
-            });
         });
 
         describe('Combined operations', () => {
@@ -890,23 +1088,32 @@ Registrar: Example Registrar, Inc.`;
                 expect(domain?.registeredAt).toBeNull();
 
                 // Act - Update RDAP cache
+                vi.useFakeTimers();
                 const rdapTime = new Date('2024-01-15T10:00:00Z');
+                vi.setSystemTime(rdapTime);
+
                 await updateDomainRdapCache({
                     domainId: testDomainId,
+                    status: RdapStatus.OK,
                     rdapFetchedAt: rdapTime,
                     rdapRaw: { test: 'rdap' },
                 });
 
                 // Act - Update WHOIS cache
                 const whoisTime = new Date('2024-01-15T11:00:00Z');
+                vi.setSystemTime(whoisTime);
+
                 await updateDomainWhoisCache({
                     domainId: testDomainId,
+                    status: WhoisStatus.REDACTED,
                     whoisFetchedAt: whoisTime,
                     whoisRaw: 'WHOIS data',
                 });
 
                 // Act - Update best known info
                 const checkedTime = new Date('2024-01-15T12:00:00Z');
+                vi.setSystemTime(checkedTime);
+
                 await updateDomainBestKnown({
                     domainId: testDomainId,
                     registeredAt: new Date('2023-01-01T00:00:00Z'),
@@ -922,18 +1129,29 @@ Registrar: Example Registrar, Inc.`;
 
                 expect(finalDomain?.rdapFetchedAt).toEqual(rdapTime);
                 expect(finalDomain?.rdapRaw).toEqual({ test: 'rdap' });
+                expect(finalDomain?.rdapFetchLockedUntil).toBeInstanceOf(Date);
+
                 expect(finalDomain?.whoisFetchedAt).toEqual(whoisTime);
                 expect(finalDomain?.whoisRaw).toBe('WHOIS data');
+                expect(finalDomain?.whoisFetchLockedUntil).toBeInstanceOf(Date);
+
                 expect(finalDomain?.registeredAt).toBeInstanceOf(Date);
                 expect(finalDomain?.checkedAt).toEqual(checkedTime);
                 expect(finalDomain?.source).toBe(DomainSource.RDAP);
                 expect(finalDomain?.status).toBe(DomainStatus.OK);
+
+                vi.useRealTimers();
             });
 
             it('should allow overwriting previous updates', async () => {
                 // Arrange - Initial updates
+                vi.useFakeTimers();
+                const initialTime = new Date('2024-01-15T10:00:00Z');
+                vi.setSystemTime(initialTime);
+
                 await updateDomainRdapCache({
                     domainId: testDomainId,
+                    status: RdapStatus.OK,
                     rdapFetchedAt: new Date('2024-01-15T10:00:00Z'),
                     rdapRaw: { initial: 'data' },
                 });
@@ -947,10 +1165,13 @@ Registrar: Example Registrar, Inc.`;
                 });
 
                 // Act - Overwrite with new data
-                const newRdapTime = new Date('2024-01-16T10:00:00Z');
+                const newTime = new Date('2024-01-16T10:00:00Z');
+                vi.setSystemTime(newTime);
+
                 await updateDomainRdapCache({
                     domainId: testDomainId,
-                    rdapFetchedAt: newRdapTime,
+                    status: RdapStatus.REDACTED,
+                    rdapFetchedAt: newTime,
                     rdapRaw: { updated: 'data' },
                 });
 
@@ -968,12 +1189,16 @@ Registrar: Example Registrar, Inc.`;
                     where: { id: testDomainId },
                 });
 
-                expect(finalDomain?.rdapFetchedAt).toEqual(newRdapTime);
+                expect(finalDomain?.rdapFetchedAt).toEqual(newTime);
                 expect(finalDomain?.rdapRaw).toEqual({ updated: 'data' });
+                expect(finalDomain?.rdapFetchLockedUntil).toBeInstanceOf(Date);
+
                 expect(finalDomain?.registeredAt).toBeNull();
                 expect(finalDomain?.checkedAt).toEqual(newCheckedTime);
                 expect(finalDomain?.source).toBe(DomainSource.WHOIS);
                 expect(finalDomain?.status).toBe(DomainStatus.REDACTED);
+
+                vi.useRealTimers();
             });
         });
     });

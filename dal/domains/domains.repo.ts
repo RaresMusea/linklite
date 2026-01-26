@@ -8,6 +8,8 @@ import {
 import { prisma } from '@/lib/prisma';
 import { Domain, Prisma } from '@/generated/prisma/client';
 import { RdapDomainParams } from '@/lib/rdap/rdap.types';
+import { computeRdapFetchCooldown } from '@/lib/rdap/rdap.cooldown';
+import { computeWhoisFetchCooldown } from '@/lib/whois/whois.cooldown';
 
 type PrismaLike = typeof prisma | Prisma.TransactionClient;
 
@@ -61,22 +63,31 @@ export async function updateDomainRdap(domainId: string, params: RdapDomainParam
 }
 
 export async function updateDomainRdapCache(input: UpdateDomainRdapCacheInput): Promise<void> {
+    const now = new Date();
+
+    const cooldown = computeRdapFetchCooldown(now, input.status);
+
     await prisma.domain.update({
         where: { id: input.domainId },
         data: {
             rdapFetchedAt: input.rdapFetchedAt,
             rdapRaw: input.rdapRaw,
+            rdapFetchLockedUntil: cooldown,
         },
     });
 }
 
 
 export async function updateDomainWhoisCache(input: UpdateDomainWhoisCacheInput): Promise<void> {
+    const now = new Date();
+    const cooldown = computeWhoisFetchCooldown(now, input.status);
+
     await prisma.domain.update({
         where: { id: input.domainId },
         data: {
             whoisFetchedAt: input.whoisFetchedAt,
             whoisRaw: input.whoisRaw,
+            whoisFetchLockedUntil: cooldown,
         },
     });
 }
