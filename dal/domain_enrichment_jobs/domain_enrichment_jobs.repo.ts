@@ -72,6 +72,17 @@ export async function claimNextDomainEnrichmentJob(): Promise<ClaimedDomainJob |
         id: candidate.id,
         domainId: candidate.domainId,
         hostname: candidate.domain.hostname,
-        attempts: candidate.attempts + 1
+        attempts: candidate.attempts + 1,
     };
+}
+
+export async function markDomainEnrichmentJobAsDone(jobId: string): Promise<void> {
+    await prisma.domainEnrichmentJob.update({
+        where: { id: jobId },
+        data: {
+            status: DomainEnrichmentJobStatus.DONE,
+            lockedUntil: null,
+            lastError: null,
+        },
+    });
 }

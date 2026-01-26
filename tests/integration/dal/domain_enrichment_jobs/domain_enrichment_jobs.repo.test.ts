@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
 import {
     claimNextDomainEnrichmentJob,
+    markDomainEnrichmentJobAsDone,
     upsertDomainEnrichmentJob,
 } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
 
@@ -642,6 +643,142 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
             });
 
             vi.useRealTimers();
+        });
+    });
+
+    describe('Mark domain enrichment job as done ', () => {
+        let testDomainId: string;
+        let testJobId: string;
+
+        beforeAll(async () => {
+            // Create test domain
+            const domain = await prisma.domain.create({
+                data: {
+                    hostname: 'done-test.example.com',
+                },
+            });
+            testDomainId = domain.id;
+        });
+
+        afterAll(async () => {
+            // Clean up
+            await prisma.domainEnrichmentJob.deleteMany({
+                where: { domainId: testDomainId },
+            });
+            await prisma.domain.delete({
+                where: { id: testDomainId },
+            });
+        });
+
+        beforeEach(async () => {
+            // Create a fresh job for each test
+            await prisma.domainEnrichmentJob.deleteMany({
+                where: { domainId: testDomainId },
+            });
+
+            const job = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId,
+                    status: DomainEnrichmentJobStatus.RUNNING,
+                    runAfter: new Date(),
+                    lockedUntil: new Date(Date.now() + 2 * 60_000),
+                    attempts: 1,
+                    lastError: 'Some error',
+                },
+            });
+            testJobId = job.id;
+        });
+
+        it('Should mark job as DONE and clear lock/error', async () => {
+            // Act
+            await markDomainEnrichmentJobAsDone(testJobId);
+
+            // Assert
+            const updatedJob = await prisma.domainEnrichmentJob.findUnique({
+                where: { id: testJobId },
+            });
+
+            expect(updatedJob?.status).toBe(DomainEnrichmentJobStatus.DONE);
+            expect(updatedJob?.lockedUntil).toBeNull();
+            expect(updatedJob?.lastError).toBeNull();
+            expect(updatedJob?.attempts).toBe(1);
+        });
+
+        it('should work from different initial statuses', async () => {
+            // Arrange - Delete the existing job first since domain_id has UNIQUE constraint
+            await prisma.domainEnrichmentJob.delete({
+                where: { id: testJobId },
+            });
+
+            // Test from PENDING
+            const pendingJob = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomainId,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: new Date(),
+                    attempts: 0,
+                    lastError: null,
+                },
+            });
+
+            // Act
+            await markDomainEnrichmentJobAsDone(pendingJob.id);
+
+            // Assert
+            const updatedPendingJob = await prisma.domainEnrichmentJob.findUnique({
+                where: { id: pendingJob.id },
+            });
+            expect(updatedPendingJob?.status).toBe(DomainEnrichmentJobStatus.DONE);
+            expect(updatedPendingJob?.lockedUntil).toBeNull();
+            expect(updatedPendingJob?.lastError).toBeNull();
+
+            // Clean up for next test
+            await prisma.domainEnrichmentJob.delete({
+                where: { id: pendingJob.id },
+            });
+
+            // Test from ERROR - need a different domain since domain_id has UNIQUE constraint
+            const testDomain2 = await prisma.domain.create({
+                data: {
+                    hostname: 'status-test-2.example.com',
+                },
+            });
+
+            const errorJob = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: testDomain2.id,
+                    status: DomainEnrichmentJobStatus.ERROR,
+                    runAfter: new Date(),
+                    attempts: 3,
+                    lastError: 'Failed to fetch data',
+                    lockedUntil: new Date(Date.now() + 2 * 60_000),
+                },
+            });
+
+            // Act
+            await markDomainEnrichmentJobAsDone(errorJob.id);
+
+            // Assert
+            const updatedErrorJob = await prisma.domainEnrichmentJob.findUnique({
+                where: { id: errorJob.id },
+            });
+            expect(updatedErrorJob?.status).toBe(DomainEnrichmentJobStatus.DONE);
+            expect(updatedErrorJob?.lockedUntil).toBeNull();
+            expect(updatedErrorJob?.lastError).toBeNull(); // Should clear error
+            expect(updatedErrorJob?.attempts).toBe(3); // Should preserve attempts count
+
+            // Clean up
+            await prisma.domainEnrichmentJob.delete({
+                where: { id: errorJob.id },
+            });
+            await prisma.domain.delete({
+                where: { id: testDomain2.id },
+            });
+        });
+
+        it('Should throw error for non-existent job', async () => {
+            const nonExistentId = 'non-existent-job-id';
+            await expect(markDomainEnrichmentJobAsDone(nonExistentId)).rejects.toThrow();
         });
     });
 });
