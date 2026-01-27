@@ -144,6 +144,7 @@ jobs:
           contains(github.event.head_commit.message, '[run-it]')
         )
       )
+
     runs-on: ubuntu-latest
 
     services:
