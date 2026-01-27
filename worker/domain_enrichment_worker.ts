@@ -44,10 +44,12 @@ async function getNextAllowedRunAfter(domainId: string): Promise<Date | null> {
 
 async function main(): Promise<void> {
     while (true) {
+        console.warn("Attempting to claim next domain enrichment job");
         const job = await claimNextDomainEnrichmentJob();
 
         if (!job) {
             //TODO: Add log here
+            console.warn(`No jobs found. Sleeping for ${IDLE_SLEEP_MS}ms...`);
             await sleep(IDLE_SLEEP_MS);
             continue;
         }
