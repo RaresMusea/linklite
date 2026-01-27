@@ -8,6 +8,7 @@
         "start": "next start",
         "lint": "eslint",
         "typecheck": "tsc --noEmit",
+        "worker:domain-enrichment": "tsx worker/domain_enrichment_worker.ts",
         "test": "vitest",
         "test:run": "vitest run",
         "test:watch": "vitest",
