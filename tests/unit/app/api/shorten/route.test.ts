@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { createLink } from '@/dal/links/links.repo';
+import { generateSlug } from '@/lib/utils';
+import { POST } from '@/app/api/shorten/route';
 import type { CreateLinkInput, CreatedLink } from '@/dal/links/links.types';
+import { NextRequest } from 'next/server';
 
 type CreateLinkFn = (input: CreateLinkInput) => Promise<CreatedLink>;
 type GenerateSlugFn = (input: number) => string;
@@ -13,14 +17,15 @@ vi.mock('@/lib/utils', () => ({
     generateSlug: vi.fn<GenerateSlugFn>(),
 }));
 
-import { createLink } from '@/dal/links/links.repo';
-import { generateSlug } from '@/lib/utils';
-import { POST } from '@/app/api/shorten/route';
-
-function req(body: unknown): Request {
-    return new Request('http://localhost/api/shorten', {
+function req(body: unknown): NextRequest {
+    return new NextRequest('http://localhost:3000/api/shorten', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+            'content-type': 'application/json',
+            // important pt getOriginFromHeaders():
+            host: 'localhost:3000',
+            'x-forwarded-proto': 'http',
+        },
         body: JSON.stringify(body),
     });
 }
@@ -48,6 +53,7 @@ describe('POST /api/shorten', () => {
 
         vi.mocked(createLink).mockResolvedValueOnce({
             id: '1',
+            domainId: '2',
             slug: 'abc123',
             targetUrl: 'https://example.com',
             ownerId: null,
@@ -62,6 +68,7 @@ describe('POST /api/shorten', () => {
         // created link payload
         expect(json.data.created).toEqual({
             id: '1',
+            domainId: '2',
             slug: 'abc123',
             targetUrl: 'https://example.com',
             ownerId: null,
@@ -85,6 +92,7 @@ describe('POST /api/shorten', () => {
 
         vi.mocked(createLink).mockRejectedValueOnce(p2002).mockResolvedValueOnce({
             id: '2',
+            domainId: '2',
             slug: 'ok',
             targetUrl: 'https://example.com',
             ownerId: null,
@@ -130,6 +138,6 @@ describe('POST /api/shorten', () => {
         expect(res.status).toBe(500);
 
         const json = await res.json();
-        expect(json.error).toContain('internal error');
+        expect(json.error).toContain('Internal server error');
     });
 });

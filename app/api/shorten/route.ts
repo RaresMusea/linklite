@@ -2,63 +2,87 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateSlug } from '@/lib/utils';
 import { z } from 'zod';
 import { LinkCreationSchema } from '@/validation/LinkCreationSchema';
-import { CreatedLink } from '@/dal/links/links.types';
 import { createLink } from '@/dal/links/links.repo';
+import { getOrigin } from '@/lib/origin';
+import { AppError } from '@/lib/errors/AppError';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-    const json: unknown = await request.json().catch(() => null);
-    const parsed = LinkCreationSchema.safeParse(json);
+    try {
+        const json: unknown = await request.json().catch(() => null);
+        const parsed = LinkCreationSchema.safeParse(json);
 
-    if (!parsed.success) {
-        const tree = z.treeifyError(parsed.error);
-        return NextResponse.json({ error: 'Validation error', details: tree }, { status: 400 });
-    }
+        if (!parsed.success) {
+            const tree = z.treeifyError(parsed.error);
+            return NextResponse.json(
+                { success: false, error: 'Validation error', details: tree, code: 'VALIDATION_ERROR' },
+                { status: 400 }
+            );
+        }
 
-    const { url } = parsed.data;
+        const { url } = parsed.data;
+        const ownerId = null;
 
-    // TODO - check for auth users
-    const ownerId = null;
+        let created = null as Awaited<ReturnType<typeof createLink>> | null;
 
-    let slug = '';
-    let created: CreatedLink | null = null;
-    let attempts = 0;
+        for (let attempts = 0; !created && attempts < 5; attempts++) {
+            const slug = generateSlug();
 
-    while (!created && attempts < 5) {
-        slug = generateSlug();
-        attempts++;
-
-        try {
-            created = await createLink({ ownerId, slug, targetUrl: url });
-        } catch (error) {
-            console.error(error);
-
-            // @ts-expect-error Fixed later
-            if (error.code === 'P2002') {
-                created = null;
-            } else {
-                console.error(error);
-                return NextResponse.json(
-                    { error: 'An internal error occurred while attempting to shorten the provided URL' },
-                    { status: 500 }
-                );
+            try {
+                created = await createLink({ ownerId, slug, targetUrl: url });
+            } catch (err) {
+                if (isPrismaUniqueError(err)) continue;
+                throw err;
             }
         }
-    }
 
-    if (!created) {
-        return NextResponse.json({ error: 'Could not generate a unique slug. Please try again.' }, { status: 500 });
-    }
+        if (!created) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: 'Could not generate a unique slug. Please try again.',
+                    code: 'SLUG_EXHAUSTED',
+                },
+                { status: 500 }
+            );
+        }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+        const baseUrl = getOrigin(request) ?? 'http://localhost:3000';
 
-    return NextResponse.json(
-        {
-            success: true,
-            data: {
-                created,
-                shortUrl: `${baseUrl}/${created.slug}`,
+        return NextResponse.json(
+            {
+                success: true,
+                data: { created, shortUrl: `${baseUrl}/${created.slug}` },
             },
-        },
-        { status: 201 }
-    );
+            { status: 201 }
+        );
+    } catch (err) {
+        // log once (server-side)
+        console.error(err);
+        return toErrorResponse(err);
+    }
+}
+
+function isPrismaUniqueError(e: unknown): e is { code: 'P2002' } {
+    if (typeof e !== 'object' || e === null) return false;
+    if (!('code' in e)) return false;
+
+    const code = (e as Record<string, unknown>).code;
+    return code === 'P2002';
+}
+
+export function toErrorResponse(err: unknown): NextResponse {
+    if (err instanceof AppError) {
+        const message = err.expose ? err.message : 'An error occurred';
+        return NextResponse.json({ success: false, error: message, code: err.code }, { status: err.status });
+    }
+
+    if (isPrismaUniqueError(err)) {
+        return NextResponse.json(
+            { success: false, error: 'Slug already exists', code: 'SLUG_CONFLICT' },
+            { status: 409 }
+        );
+    }
+
+    // Unknown -> 500 generic
+    return NextResponse.json({ success: false, error: 'Internal server error', code: 'INTERNAL' }, { status: 500 });
 }
