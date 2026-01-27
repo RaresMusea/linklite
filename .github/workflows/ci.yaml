@@ -138,6 +138,8 @@ jobs:
   integration-tests:
     name: Integration Tests (only push to testing/main)
     needs: checks
+    env:
+      DATABASE_URL: postgresql://linklite:linklite@localhost:5432/linklite_test
     if: |
       github.event_name == 'push' &&
       (
