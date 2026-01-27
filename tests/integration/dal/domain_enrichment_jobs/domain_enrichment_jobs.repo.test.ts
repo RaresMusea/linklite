@@ -14,19 +14,18 @@ const testDomainId = 'test-integration-domain-id';
 
 describe('Domain Enrichment Jobs repository integration tests', () => {
     beforeEach(async () => {
+        await resetDb();
         await prisma.domain.upsert({
             where: { id: testDomainId },
             create: {
                 id: testDomainId,
                 hostname: 'test-integration.example.com',
+                firstSeenAt: new Date(),
             },
             update: {},
         });
     });
 
-    afterEach(async () => {
-        await resetDb();
-    });
 
     describe('Upsert Domain Enrichment job', () => {
         it('Should create a new job when none exists', async () => {
@@ -641,7 +640,7 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
             // Test from PENDING
             const pendingJob = await prisma.domainEnrichmentJob.update({
                 where: { id: job.id },
-                data: {status: DomainEnrichmentJobStatus.PENDING },
+                data: { status: DomainEnrichmentJobStatus.PENDING },
             });
 
             // Act
