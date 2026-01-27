@@ -192,6 +192,7 @@ jobs:
       - name: Run migrations
         run: pnpm prisma migrate deploy
 
+
       - name: Integration tests
         env:
           RUN_WHOIS_INTEGRATION: "1"
