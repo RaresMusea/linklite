@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { createLink } from '@/dal/links/links.repo';
 import { normalizeHostnameFromUrl } from '@/lib/utils';
 import {
+    getDomainProvidersLocks,
     updateDomainBestKnown,
     updateDomainRdap,
     updateDomainRdapCache,
@@ -41,7 +42,7 @@ describe('Domain repo integration tests', () => {
         await prisma.$disconnect();
     });
 
-    it('creates domain with firstSeenAt timestamp', async () => {
+    it('Creates domain with firstSeenAt timestamp', async () => {
         // Arrange
         const mockHostname = 'new-domain.com';
         vi.mocked(normalizeHostnameFromUrl).mockReturnValue(mockHostname);
@@ -63,7 +64,7 @@ describe('Domain repo integration tests', () => {
         expect(domain?.checkedAt).toBeNull();
     });
 
-    it('does not update firstSeenAt when domain already exists', async () => {
+    it('Does not update firstSeenAt when domain already exists', async () => {
         // Arrange
         const mockHostname = 'existing-domain.com';
         vi.mocked(normalizeHostnameFromUrl).mockReturnValue(mockHostname);
@@ -85,13 +86,13 @@ describe('Domain repo integration tests', () => {
     });
 });
 
-describe('updateDomainRdap integration tests', () => {
+describe('Update domain RDAP integration tests', () => {
     beforeEach(async () => {
         await prisma.link.deleteMany();
         await prisma.domain.deleteMany();
     });
 
-    it('updates RDAP information for an existing domain', async () => {
+    it('Updates RDAP information for an existing domain', async () => {
         // Arrange
         const domain = await prisma.domain.create({
             data: {
@@ -130,7 +131,7 @@ describe('updateDomainRdap integration tests', () => {
         expect(updatedDomain.updatedAt).toBeInstanceOf(Date);
     });
 
-    it('sets current timestamp when rdapFetchedAt is not provided', async () => {
+    it('Sets current timestamp when rdapFetchedAt is not provided', async () => {
         // Arrange
         const domain = await prisma.domain.create({
             data: {
@@ -158,7 +159,7 @@ describe('updateDomainRdap integration tests', () => {
         expect(updatedDomain.rdapFetchedAt!.getTime()).toBeLessThanOrEqual(Date.now());
     });
 
-    it('sets current timestamp when checkedAt is not provided', async () => {
+    it('Sets current timestamp when checkedAt is not provided', async () => {
         // Arrange
         const domain = await prisma.domain.create({
             data: {
@@ -185,7 +186,7 @@ describe('updateDomainRdap integration tests', () => {
         expect(updatedDomain.checkedAt!.getTime()).toBeLessThanOrEqual(Date.now());
     });
 
-    it('handles partial RDAP updates without overwriting existing fields', async () => {
+    it('Handles partial RDAP updates without overwriting existing fields', async () => {
         // Arrange
         const initialRdapRaw = { existing: 'data' };
         const domain = await prisma.domain.create({
@@ -220,7 +221,7 @@ describe('updateDomainRdap integration tests', () => {
         expect(updatedDomain.rdapRaw).toEqual(initialRdapRaw); // Should remain unchanged
     });
 
-    it('updates rdapRaw only when explicitly provided', async () => {
+    it('Updates rdapRaw only when explicitly provided', async () => {
         // Arrange
         const initialRdapRaw = { existing: 'data' };
         const domain = await prisma.domain.create({
@@ -264,7 +265,7 @@ describe('updateDomainRdap integration tests', () => {
         expect(updated3.rdapRaw).toEqual(newRdapRaw); // Should be updated
     });
 
-    it('throws error when domain does not exist', async () => {
+    it('Throws error when domain does not exist', async () => {
         // Arrange
         const nonExistentId = 'non-existent-id';
         const rdapParams: RdapDomainParams = {
@@ -277,7 +278,7 @@ describe('updateDomainRdap integration tests', () => {
         await expect(updateDomainRdap(nonExistentId, rdapParams)).rejects.toThrow(); // Prisma will throw an error
     });
 
-    it('maintains other domain fields unchanged', async () => {
+    it('Maintains other domain fields unchanged', async () => {
         // Arrange
         const domain = await prisma.domain.create({
             data: {
@@ -302,7 +303,7 @@ describe('updateDomainRdap integration tests', () => {
         expect(updatedDomain.createdAt).toBeInstanceOf(Date);
     });
 
-    it('updates multiple domains independently', async () => {
+    it('Updates multiple domains independently', async () => {
         // Arrange
         const domain1 = await prisma.domain.create({
             data: { hostname: 'example1.com' },
@@ -338,7 +339,7 @@ describe('updateDomainRdap integration tests', () => {
         expect(updated2.source).toBe('RDAP');
     });
 
-    it('handles domain with associated links', async () => {
+    it('Handles domain with associated links', async () => {
         // Arrange
         const domain = await prisma.domain.create({
             data: {
@@ -400,8 +401,8 @@ describe('updateDomainRdap integration tests', () => {
             await prisma.domain.deleteMany();
         });
 
-        describe('updateDomainRdapCache', () => {
-            it('should update RDAP cache fields with locked until date for OK status', async () => {
+        describe('Update domain RDAP cache data integration tests', () => {
+            it('Should update RDAP cache fields with locked until date for OK status', async () => {
                 // Arrange
                 vi.useFakeTimers();
                 const now = new Date('2024-01-15T10:30:00Z');
@@ -444,7 +445,7 @@ describe('updateDomainRdap integration tests', () => {
                 vi.useRealTimers();
             });
 
-            it('should calculate different locked until dates for different statuses', async () => {
+            it('Should calculate different locked until dates for different statuses', async () => {
                 // Arrange
                 vi.useFakeTimers();
                 const now = new Date('2024-01-15T10:30:00Z');
@@ -499,7 +500,7 @@ describe('updateDomainRdap integration tests', () => {
                 vi.useRealTimers();
             });
 
-            it('should update only RDAP fields and preserve others', async () => {
+            it('Should update only RDAP fields and preserve others', async () => {
                 // Arrange - Create domain with existing data
                 await prisma.domain.update({
                     where: { id: testDomainId },
@@ -550,7 +551,7 @@ describe('updateDomainRdap integration tests', () => {
                 vi.useRealTimers();
             });
 
-            it('should set rdapFetchedAt to null', async () => {
+            it('Should set rdapFetchedAt to null', async () => {
                 // Arrange
                 vi.useFakeTimers();
                 const now = new Date('2024-01-15T10:30:00Z');
@@ -578,7 +579,7 @@ describe('updateDomainRdap integration tests', () => {
                 vi.useRealTimers();
             });
 
-            it('should handle complex RDAP JSON data', async () => {
+            it('Should handle complex RDAP JSON data', async () => {
                 // Arrange
                 vi.useFakeTimers();
                 const now = new Date('2024-01-15T10:30:00Z');
@@ -633,7 +634,7 @@ describe('updateDomainRdap integration tests', () => {
                 vi.useRealTimers();
             });
 
-            it('should throw error for non-existent domain', async () => {
+            it('Should throw error for non-existent domain', async () => {
                 // Arrange
                 vi.useFakeTimers();
                 const now = new Date('2024-01-15T10:30:00Z');
@@ -655,7 +656,7 @@ describe('updateDomainRdap integration tests', () => {
         });
 
         describe('updateDomainWhoisCache', () => {
-            it('should update WHOIS cache fields with locked until date for OK status', async () => {
+            it('Should update WHOIS cache fields with locked until date for OK status', async () => {
                 // Arrange
                 vi.useFakeTimers();
                 const now = new Date('2024-01-15T10:30:00Z');
@@ -696,7 +697,7 @@ Registrar: Example Registrar, Inc.`;
                 vi.useRealTimers();
             });
 
-            it('should calculate different locked until dates for different statuses in WHOIS', async () => {
+            it('Should calculate different locked until dates for different statuses in WHOIS', async () => {
                 // Arrange
                 vi.useFakeTimers();
                 const now = new Date('2024-01-15T10:30:00Z');
@@ -749,7 +750,7 @@ Registrar: Example Registrar, Inc.`;
                 vi.useRealTimers();
             });
 
-            it('should update only WHOIS fields and preserve others', async () => {
+            it('Should update only WHOIS fields and preserve others', async () => {
                 // Arrange - Create domain with existing data
                 await prisma.domain.update({
                     where: { id: testDomainId },
@@ -800,7 +801,7 @@ Registrar: Example Registrar, Inc.`;
                 vi.useRealTimers();
             });
 
-            it('should set whoisFetchedAt and whoisRaw to null', async () => {
+            it('Should set whoisFetchedAt and whoisRaw to null', async () => {
                 // Arrange
                 vi.useFakeTimers();
                 const now = new Date('2024-01-15T10:30:00Z');
@@ -828,7 +829,7 @@ Registrar: Example Registrar, Inc.`;
                 vi.useRealTimers();
             });
 
-            it('should handle large WHOIS text', async () => {
+            it('Should handle large WHOIS text', async () => {
                 // Arrange
                 vi.useFakeTimers();
                 const now = new Date('2024-01-15T10:30:00Z');
@@ -861,7 +862,7 @@ Registrar: Example Registrar, Inc.`;
                 vi.useRealTimers();
             });
 
-            it('should handle empty WHOIS string', async () => {
+            it('Should handle empty WHOIS string', async () => {
                 // Arrange
                 vi.useFakeTimers();
                 const now = new Date('2024-01-15T10:30:00Z');
@@ -890,7 +891,7 @@ Registrar: Example Registrar, Inc.`;
         });
 
         describe('updateDomainBestKnown', () => {
-            it('should update domain best known information', async () => {
+            it('Should update domain best known information', async () => {
                 // Arrange
                 const registeredAt = new Date('2023-01-01T00:00:00Z');
                 const checkedAt = new Date('2024-01-15T10:30:00Z');
@@ -918,12 +919,12 @@ Registrar: Example Registrar, Inc.`;
                 expect(updatedDomain?.source).toBe(source);
                 expect(updatedDomain?.status).toBe(status);
 
-                // Verify cache fields are unchanged (should be null)
+                // Verify cache fields are unchanged (Should be null)
                 expect(updatedDomain?.rdapFetchedAt).toBeNull();
                 expect(updatedDomain?.whoisFetchedAt).toBeNull();
             });
 
-            it('should update only best known fields and preserve cache data', async () => {
+            it('Should update only best known fields and preserve cache data', async () => {
                 // Arrange - Create domain with existing cache data
                 await prisma.domain.update({
                     where: { id: testDomainId },
@@ -967,7 +968,7 @@ Registrar: Example Registrar, Inc.`;
                 expect(updatedDomain?.whoisFetchLockedUntil).toBeInstanceOf(Date);
             });
 
-            it('should set registeredAt to null', async () => {
+            it('Should set registeredAt to null', async () => {
                 // Arrange
                 const input = {
                     domainId: testDomainId,
@@ -991,7 +992,7 @@ Registrar: Example Registrar, Inc.`;
                 expect(updatedDomain?.status).toBe(DomainStatus.MISSING);
             });
 
-            it('should handle all domain statuses', async () => {
+            it('Should handle all domain statuses', async () => {
                 // Arrange
                 const statuses = [
                     DomainStatus.OK,
@@ -1023,7 +1024,7 @@ Registrar: Example Registrar, Inc.`;
                 }
             });
 
-            it('should handle all domain sources', async () => {
+            it('Should handle all domain sources', async () => {
                 // Arrange
                 const sources = [DomainSource.RDAP, DomainSource.WHOIS, DomainSource.UNKNOWN];
 
@@ -1048,7 +1049,7 @@ Registrar: Example Registrar, Inc.`;
                 }
             });
 
-            it('should update checkedAt to current time', async () => {
+            it('Should update checkedAt to current time', async () => {
                 // Arrange
                 const testTime = new Date('2024-01-15T10:30:00Z');
                 vi.useFakeTimers();
@@ -1077,7 +1078,7 @@ Registrar: Example Registrar, Inc.`;
         });
 
         describe('Combined operations', () => {
-            it('should allow separate updates to different domain aspects', async () => {
+            it('Should allow separate updates to different domain aspects', async () => {
                 // Arrange
                 const domain = await prisma.domain.findUnique({
                     where: { id: testDomainId },
@@ -1143,7 +1144,7 @@ Registrar: Example Registrar, Inc.`;
                 vi.useRealTimers();
             });
 
-            it('should allow overwriting previous updates', async () => {
+            it('Should allow overwriting previous updates', async () => {
                 // Arrange - Initial updates
                 vi.useFakeTimers();
                 const initialTime = new Date('2024-01-15T10:00:00Z');
@@ -1200,6 +1201,301 @@ Registrar: Example Registrar, Inc.`;
 
                 vi.useRealTimers();
             });
+        });
+    });
+
+    describe('getDomainProvidersLocks integration tests', () => {
+        let testDomainId: string;
+
+        beforeEach(async () => {
+            // Clean up test data
+            await prisma.domain.deleteMany();
+
+            // Create a test domain
+            const domain = await prisma.domain.create({
+                data: {
+                    hostname: 'test-domain.com',
+                    firstSeenAt: new Date(),
+                    source: DomainSource.UNKNOWN,
+                    status: DomainStatus.UNKNOWN,
+                    rdapFetchLockedUntil: null,
+                    whoisFetchLockedUntil: null,
+                },
+            });
+
+            testDomainId = domain.id;
+        });
+
+        afterEach(async () => {
+            await prisma.domain.deleteMany();
+        });
+
+        it('Should return null when domain does not exist', async () => {
+            // Arrange
+            const nonExistentId = 'non-existent-id';
+
+            // Act
+            const result = await getDomainProvidersLocks(nonExistentId);
+
+            // Assert
+            expect(result).toBeNull();
+        });
+
+        it('Should return null when domain exists but both locks are null', async () => {
+            // Arrange
+            // Domain already created with null locks in beforeEach
+
+            // Act
+            const result = await getDomainProvidersLocks(testDomainId);
+
+            // Assert
+            expect(result).toBeNull();
+        });
+
+        it('Should return null when rdapFetchLockedUntil is null', async () => {
+            // Arrange
+            await prisma.domain.update({
+                where: { id: testDomainId },
+                data: {
+                    whoisFetchLockedUntil: new Date('2024-12-31T23:59:59Z'),
+                    rdapFetchLockedUntil: null,
+                },
+            });
+
+            // Act
+            const result = await getDomainProvidersLocks(testDomainId);
+
+            // Assert
+            expect(result).toBeNull();
+        });
+
+        it('Should return null when whoisFetchLockedUntil is null', async () => {
+            // Arrange
+            await prisma.domain.update({
+                where: { id: testDomainId },
+                data: {
+                    rdapFetchLockedUntil: new Date('2024-12-31T23:59:59Z'),
+                    whoisFetchLockedUntil: null,
+                },
+            });
+
+            // Act
+            const result = await getDomainProvidersLocks(testDomainId);
+
+            // Assert
+            expect(result).toBeNull();
+        });
+
+        it('Should return locks when both are set', async () => {
+            // Arrange
+            const rdapLock = new Date('2024-12-31T23:59:59Z');
+            const whoisLock = new Date('2024-12-30T23:59:59Z');
+
+            await prisma.domain.update({
+                where: { id: testDomainId },
+                data: {
+                    rdapFetchLockedUntil: rdapLock,
+                    whoisFetchLockedUntil: whoisLock,
+                },
+            });
+
+            // Act
+            const result = await getDomainProvidersLocks(testDomainId);
+
+            // Assert
+            expect(result).toEqual({
+                rdapFetchLockedUntil: rdapLock,
+                whoisFetchLockedUntil: whoisLock,
+            });
+        });
+
+        it('Should return only the two lock fields', async () => {
+            // Arrange
+            const rdapLock = new Date('2024-12-31T23:59:59Z');
+            const whoisLock = new Date('2024-12-30T23:59:59Z');
+
+            await prisma.domain.update({
+                where: { id: testDomainId },
+                data: {
+                    hostname: 'updated-domain.com',
+                    source: DomainSource.RDAP,
+                    status: DomainStatus.OK,
+                    registeredAt: new Date('2023-01-01'),
+                    checkedAt: new Date('2024-01-01'),
+                    rdapFetchLockedUntil: rdapLock,
+                    whoisFetchLockedUntil: whoisLock,
+                    rdapFetchedAt: new Date('2024-01-01'),
+                    whoisFetchedAt: new Date('2024-01-02'),
+                },
+            });
+
+            // Act
+            const result = await getDomainProvidersLocks(testDomainId);
+
+            // Assert
+            expect(result).toEqual({
+                rdapFetchLockedUntil: rdapLock,
+                whoisFetchLockedUntil: whoisLock,
+            });
+
+            // Verify no other properties exist
+            expect(Object.keys(result || {})).toHaveLength(2);
+            expect(result).not.toHaveProperty('hostname');
+            expect(result).not.toHaveProperty('source');
+            expect(result).not.toHaveProperty('status');
+        });
+
+        it('Should handle future lock dates', async () => {
+            // Arrange
+            const now = new Date();
+            const futureRdapLock = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days in future
+            const futureWhoisLock = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000); // 90 days in future
+
+            await prisma.domain.update({
+                where: { id: testDomainId },
+                data: {
+                    rdapFetchLockedUntil: futureRdapLock,
+                    whoisFetchLockedUntil: futureWhoisLock,
+                },
+            });
+
+            // Act
+            const result = await getDomainProvidersLocks(testDomainId);
+
+            // Assert
+            expect(result).toEqual({
+                rdapFetchLockedUntil: futureRdapLock,
+                whoisFetchLockedUntil: futureWhoisLock,
+            });
+            expect(result?.rdapFetchLockedUntil?.getTime()).toBeGreaterThan(now.getTime());
+            expect(result?.whoisFetchLockedUntil?.getTime()).toBeGreaterThan(now.getTime());
+        });
+
+        it('Should handle past lock dates (expired locks)', async () => {
+            // Arrange
+            const now = new Date();
+            const pastRdapLock = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days in past
+            const pastWhoisLock = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); // 90 days in past
+
+            await prisma.domain.update({
+                where: { id: testDomainId },
+                data: {
+                    rdapFetchLockedUntil: pastRdapLock,
+                    whoisFetchLockedUntil: pastWhoisLock,
+                },
+            });
+
+            // Act
+            const result = await getDomainProvidersLocks(testDomainId);
+
+            // Assert
+            expect(result).toEqual({
+                rdapFetchLockedUntil: pastRdapLock,
+                whoisFetchLockedUntil: pastWhoisLock,
+            });
+            expect(result?.rdapFetchLockedUntil?.getTime()).toBeLessThan(now.getTime());
+            expect(result?.whoisFetchLockedUntil?.getTime()).toBeLessThan(now.getTime());
+        });
+
+        it('Should handle same date for both locks', async () => {
+            // Arrange
+            const sameDate = new Date('2024-12-31T23:59:59Z');
+
+            await prisma.domain.update({
+                where: { id: testDomainId },
+                data: {
+                    rdapFetchLockedUntil: sameDate,
+                    whoisFetchLockedUntil: sameDate,
+                },
+            });
+
+            // Act
+            const result = await getDomainProvidersLocks(testDomainId);
+
+            // Assert
+            expect(result).toEqual({
+                rdapFetchLockedUntil: sameDate,
+                whoisFetchLockedUntil: sameDate,
+            });
+            expect(result?.rdapFetchLockedUntil).toStrictEqual(result?.whoisFetchLockedUntil);
+        });
+
+        it('Should work with other domain fields set to null', async () => {
+            // Arrange
+            const rdapLock = new Date('2024-12-31T23:59:59Z');
+            const whoisLock = new Date('2024-12-30T23:59:59Z');
+
+            await prisma.domain.update({
+                where: { id: testDomainId },
+                data: {
+                    hostname: 'test-domain.com',
+                    registeredAt: null,
+                    checkedAt: null,
+                    source: DomainSource.UNKNOWN,
+                    status: DomainStatus.UNKNOWN,
+                    rdapFetchedAt: null,
+                    whoisFetchedAt: null,
+                    whoisRaw: null,
+                    rdapFetchLockedUntil: rdapLock,
+                    whoisFetchLockedUntil: whoisLock,
+                },
+            });
+
+            // Act
+            const result = await getDomainProvidersLocks(testDomainId);
+
+            // Assert
+            expect(result).toEqual({
+                rdapFetchLockedUntil: rdapLock,
+                whoisFetchLockedUntil: whoisLock,
+            });
+        });
+
+        it('Should handle multiple domains independently', async () => {
+            // Arrange
+            // Create additional domains
+            const domain2 = await prisma.domain.create({
+                data: {
+                    hostname: 'domain2.com',
+                    rdapFetchLockedUntil: new Date('2024-12-01T00:00:00Z'),
+                    whoisFetchLockedUntil: new Date('2024-12-02T00:00:00Z'),
+                },
+            });
+
+            const domain3 = await prisma.domain.create({
+                data: {
+                    hostname: 'domain3.com',
+                    rdapFetchLockedUntil: null,
+                    whoisFetchLockedUntil: new Date('2024-12-03T00:00:00Z'),
+                },
+            });
+
+            // Set locks for first domain
+            await prisma.domain.update({
+                where: { id: testDomainId },
+                data: {
+                    rdapFetchLockedUntil: new Date('2024-12-10T00:00:00Z'),
+                    whoisFetchLockedUntil: new Date('2024-12-11T00:00:00Z'),
+                },
+            });
+
+            // Act
+            const result1 = await getDomainProvidersLocks(testDomainId);
+            const result2 = await getDomainProvidersLocks(domain2.id);
+            const result3 = await getDomainProvidersLocks(domain3.id);
+
+            // Assert
+            expect(result1).toEqual({
+                rdapFetchLockedUntil: new Date('2024-12-10T00:00:00Z'),
+                whoisFetchLockedUntil: new Date('2024-12-11T00:00:00Z'),
+            });
+
+            expect(result2).toEqual({
+                rdapFetchLockedUntil: new Date('2024-12-01T00:00:00Z'),
+                whoisFetchLockedUntil: new Date('2024-12-02T00:00:00Z'),
+            });
+
+            expect(result3).toBeNull(); // rdapFetchLockedUntil is null
         });
     });
 });

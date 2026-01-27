@@ -1,5 +1,5 @@
 import {
-    CreateDomainInput,
+    CreateDomainInput, DomainProviderLocks,
     UpdateDomainBestKnownInput,
     UpdateDomainRdapCacheInput,
     UpdateDomainWhoisCacheInput,
@@ -102,4 +102,19 @@ export async function updateDomainBestKnown(input: UpdateDomainBestKnownInput): 
             status: input.status,
         },
     });
+}
+
+
+export async function getDomainProvidersLocks(domainId: string): Promise<DomainProviderLocks | null> {
+    const locks = await prisma.domain.findUnique({
+        where: { id: domainId },
+        select: {
+            rdapFetchLockedUntil: true,
+            whoisFetchLockedUntil: true,
+        }
+    });
+
+    if (!locks || !locks.rdapFetchLockedUntil || !locks.whoisFetchLockedUntil) return null;
+
+    return locks;
 }

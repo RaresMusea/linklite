@@ -48,3 +48,8 @@ export type BestKnownDomainInfo = {
     source: DomainSource;
     status: DomainStatus;
 };
+
+export type DomainProviderLocks = {
+    rdapFetchLockedUntil: Date | null;
+    whoisFetchLockedUntil: Date | null;
+};
