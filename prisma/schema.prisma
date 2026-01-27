@@ -7,6 +7,28 @@ datasource db {
   provider = "postgresql"
 }
 
+enum DomainSource {
+  RDAP
+  WHOIS
+  UNKNOWN
+}
+
+enum DomainStatus {
+  OK
+  MISSING
+  REDACTED
+  ERROR
+  UNSUPPORTED
+  UNKNOWN
+}
+
+enum DomainEnrichmentJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  ERROR
+}
+
 model Link {
   id        String   @id @default(cuid())
   slug      String   @unique
@@ -20,13 +42,51 @@ model Link {
 }
 
 model Domain {
-  id             String    @id @default(cuid())
-  hostname       String    @unique
-  firstSeenAt    DateTime  @default(now()) @map("first_seen_at")
-  whoisCreatedAt DateTime? @map("whois_created_at")
-  whoisCheckedAt DateTime? @map("whois_checked_at") @db.Date
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id       String @id @default(cuid())
+  hostname String @unique
 
-  links Link[]
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+
+  // Derived, provider-agnostic
+  registeredAt DateTime?    @map("registered_at") // domain registration date
+  checkedAt    DateTime?    @map("checked_at") // last time we checked registration data
+  source       DomainSource @default(UNKNOWN) @map("source")
+  status       DomainStatus @default(UNKNOWN) @map("status")
+
+  // RDAP cache
+  rdapRaw       Json?     @map("rdap_raw")
+  rdapFetchedAt DateTime? @map("rdap_fetched_at")
+
+  // WHOIS cache
+  whoisRaw       String?   @map("whois_raw")
+  whoisFetchedAt DateTime? @map("whois_fetched_at")
+
+  rdapFetchLockedUntil  DateTime? @map("rdap_fetch_locked_until")
+  whoisFetchLockedUntil DateTime? @map("whois_fetch_locked_until")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  links                Link[]
+  domainEnrichmentJobs DomainEnrichmentJob[]
+}
+
+model DomainEnrichmentJob {
+  id       String @id @default(cuid())
+  domainId String @unique @map("domain_id")
+
+  status    DomainEnrichmentJobStatus @default(PENDING) @map("status")
+  runAfter  DateTime                  @default(now()) @map("run_after")
+  attempts  Int                       @default(0)
+  lastError String?                   @map("last_error")
+
+  lockedUntil DateTime? @map("locked_until")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  domain Domain @relation(fields: [domainId], references: [id])
+
+  @@index([lockedUntil])
+  @@index([status, runAfter])
 }

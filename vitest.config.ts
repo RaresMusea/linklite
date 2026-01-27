@@ -6,13 +6,12 @@ const root = path.resolve(__dirname);
 
 dotenv.config({ path: '.env.test' });
 
-const alias = [
-    { find: /^@\//, replacement: `${root}/` },
-];
+const alias = [{ find: /^@\//, replacement: `${root}/` }];
 
 export default defineConfig({
     root,
     test: {
+        reporters: ['verbose', 'verbose', 'verbose'],
         globals: true,
         projects: [
             defineProject({
