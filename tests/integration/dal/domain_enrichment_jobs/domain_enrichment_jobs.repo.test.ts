@@ -161,35 +161,6 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
             testDomainId3 = domain3.id;
         });
 
-        afterAll(async () => {
-            // Clean up all test data
-            await prisma.domainEnrichmentJob.deleteMany({
-                where: {
-                    domainId: {
-                        in: [testDomainId1, testDomainId2, testDomainId3],
-                    },
-                },
-            });
-            await prisma.domain.deleteMany({
-                where: {
-                    id: {
-                        in: [testDomainId1, testDomainId2, testDomainId3],
-                    },
-                },
-            });
-        });
-
-        beforeEach(async () => {
-            // Clear all jobs before each test
-            await prisma.domainEnrichmentJob.deleteMany({
-                where: {
-                    domainId: {
-                        in: [testDomainId1, testDomainId2, testDomainId3],
-                    },
-                },
-            });
-        });
-
         it('Should claim the next PENDING job', async () => {
             // Arrange
             vi.useFakeTimers();
