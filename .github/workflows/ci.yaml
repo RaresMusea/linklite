@@ -140,7 +140,7 @@ jobs:
         github.ref == 'refs/heads/testing' ||
         github.ref == 'refs/heads/main' ||
         (
-          github.ref == 'refs/heads/develop' &&
+          (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/feature/')) &&
           contains(github.event.head_commit.message, '[run-it]')
         )
       )
