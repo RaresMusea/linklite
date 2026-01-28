@@ -5,6 +5,7 @@ import { normalizeHostnameFromUrl } from '@/lib/utils';
 import { upsertDomainEnrichmentJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
 import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
 import { InvalidHostnameError } from '@/lib/errors/InvalidHostnameError';
+import { resetDb } from '@/tests/helpers/db';
 
 vi.mock('@/lib/utils', () => ({
     normalizeHostnameFromUrl: vi.fn(),
@@ -14,11 +15,12 @@ vi.mock('@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo', () => ({
     upsertDomainEnrichmentJob: vi.fn(),
 }));
 
+beforeEach(async () => {
+    await resetDb();
+})
+
 describe('Link Repository - Integration Tests', () => {
     beforeEach(async () => {
-        await prisma.domainEnrichmentJob.deleteMany();
-        await prisma.link.deleteMany();
-        await prisma.domain.deleteMany();
         vi.clearAllMocks();
     });
 
