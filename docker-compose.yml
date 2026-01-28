@@ -20,11 +20,13 @@ services:
       retries: 20
 
   app:
-    build:
+    build: &app_build
       context: .
-    container_name: app
+      args:
+        DATABASE_URL: ${DATABASE_URL}
+    container_name: linklite-app
     restart: unless-stopped
-    env_file:
+    env_file: &common_env
       - .env.docker
     ports:
       - "3000:3000"
@@ -34,6 +36,17 @@ services:
     command: >
       sh -lc "pnpm prisma migrate deploy &&
               pnpm start"
+
+  worker:
+    build: *app_build
+    container_name: linklite-worker
+    restart: unless-stopped
+    env_file: *common_env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -lc "pnpm start:worker"
 
 volumes:
   pgdata:

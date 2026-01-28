@@ -24,6 +24,9 @@ RUN pnpm prisma generate
 # Build Next.js
 RUN pnpm build
 
+# Run worker (transpile TS to JS)
+RUN pnpm build:worker
+
 # ---- run (runtime) ----
 FROM node:20-bookworm-slim AS run
 WORKDIR /app
@@ -39,6 +42,8 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next ./.next
+COPY --from=build /app/dist ./dist
+RUN node -e "require('fs').writeFileSync('dist/package.json', JSON.stringify({ type: 'module' }))"
 
 EXPOSE 3000
 CMD ["pnpm", "start"]

@@ -358,5 +358,8 @@ jobs:
       - name: Generate Prisma
         run: pnpm prisma generate
 
-      - name: Build
-        run: pnpm run build
+      - name: Build application
+        run: pnpm run build # Run build
+
+      - name: Build domain enrichment worker
+        run: "pnpm run build:worker"
