@@ -15,5 +15,9 @@ export default defineConfig({
         globals: true,
         environment: 'node',
         include: ['tests/integration/**/*.test.ts'],
+        pool: 'forks',
+        fileParallelism: false,
+        maxConcurrency: 1,
+        sequence: { concurrent: false },
     },
 });

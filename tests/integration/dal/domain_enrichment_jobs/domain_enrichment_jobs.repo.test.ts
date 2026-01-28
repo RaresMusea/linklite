@@ -1,4 +1,4 @@
-import { describe, beforeEach, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, beforeEach, it, expect, afterAll, vi, afterEach } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
 import {
@@ -7,46 +7,27 @@ import {
     requeueDomainEnrichmentJob,
     upsertDomainEnrichmentJob,
 } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
+import { resetDb } from '@/tests/helpers/db';
+import { DomainEnrichmentJob } from '@/generated/prisma/client';
+
+const testDomainId = 'test-integration-domain-id';
 
 describe('Domain Enrichment Jobs repository integration tests', () => {
+    beforeEach(async () => {
+        await resetDb();
+        await prisma.domain.upsert({
+            where: { id: testDomainId },
+            create: {
+                id: testDomainId,
+                hostname: 'test-integration.example.com',
+                firstSeenAt: new Date(),
+            },
+            update: {},
+        });
+    });
+
+
     describe('Upsert Domain Enrichment job', () => {
-        const testDomainId = 'test-integration-domain-id';
-
-        beforeAll(async () => {
-            // Clean up any existing test data
-            await prisma.domainEnrichmentJob.deleteMany({
-                where: { domainId: testDomainId },
-            });
-
-            // Ensure test domain exists
-            await prisma.domain.upsert({
-                where: { id: testDomainId },
-                create: {
-                    id: testDomainId,
-                    hostname: 'test-integration.example.com',
-                },
-                update: {},
-            });
-        });
-
-        afterAll(async () => {
-            // Clean up test data
-            await prisma.domainEnrichmentJob.deleteMany({
-                where: { domainId: testDomainId },
-            });
-
-            await prisma.domain.deleteMany({
-                where: { id: testDomainId },
-            });
-        });
-
-        beforeEach(async () => {
-            // Ensure no job exists before each test
-            await prisma.domainEnrichmentJob.deleteMany({
-                where: { domainId: testDomainId },
-            });
-        });
-
         it('Should create a new job when none exists', async () => {
             // Arrange
             const input = {
@@ -155,7 +136,7 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
         let testDomainId2: string;
         let testDomainId3: string;
 
-        beforeAll(async () => {
+        beforeEach(async () => {
             // Create test domains
             const domain1 = await prisma.domain.create({
                 data: {
@@ -177,35 +158,6 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
                 },
             });
             testDomainId3 = domain3.id;
-        });
-
-        afterAll(async () => {
-            // Clean up all test data
-            await prisma.domainEnrichmentJob.deleteMany({
-                where: {
-                    domainId: {
-                        in: [testDomainId1, testDomainId2, testDomainId3],
-                    },
-                },
-            });
-            await prisma.domain.deleteMany({
-                where: {
-                    id: {
-                        in: [testDomainId1, testDomainId2, testDomainId3],
-                    },
-                },
-            });
-        });
-
-        beforeEach(async () => {
-            // Clear all jobs before each test
-            await prisma.domainEnrichmentJob.deleteMany({
-                where: {
-                    domainId: {
-                        in: [testDomainId1, testDomainId2, testDomainId3],
-                    },
-                },
-            });
         });
 
         it('Should claim the next PENDING job', async () => {
@@ -648,36 +600,11 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
     });
 
     describe('Mark domain enrichment job as done ', () => {
-        let testDomainId: string;
         let testJobId: string;
-
-        beforeAll(async () => {
-            // Create test domain
-            const domain = await prisma.domain.create({
-                data: {
-                    hostname: 'done-test.example.com',
-                },
-            });
-            testDomainId = domain.id;
-        });
-
-        afterAll(async () => {
-            // Clean up
-            await prisma.domainEnrichmentJob.deleteMany({
-                where: { domainId: testDomainId },
-            });
-            await prisma.domain.delete({
-                where: { id: testDomainId },
-            });
-        });
+        let job: DomainEnrichmentJob;
 
         beforeEach(async () => {
-            // Create a fresh job for each test
-            await prisma.domainEnrichmentJob.deleteMany({
-                where: { domainId: testDomainId },
-            });
-
-            const job = await prisma.domainEnrichmentJob.create({
+            job = await prisma.domainEnrichmentJob.create({
                 data: {
                     domainId: testDomainId,
                     status: DomainEnrichmentJobStatus.RUNNING,
@@ -688,6 +615,10 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
                 },
             });
             testJobId = job.id;
+        });
+
+        afterEach(async () => {
+            await resetDb();
         });
 
         it('Should mark job as DONE and clear lock/error', async () => {
@@ -706,20 +637,10 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
         });
 
         it('Should work from different initial statuses', async () => {
-            // Arrange - Delete the existing job first since domain_id has UNIQUE constraint
-            await prisma.domainEnrichmentJob.delete({
-                where: { id: testJobId },
-            });
-
             // Test from PENDING
-            const pendingJob = await prisma.domainEnrichmentJob.create({
-                data: {
-                    domainId: testDomainId,
-                    status: DomainEnrichmentJobStatus.PENDING,
-                    runAfter: new Date(),
-                    attempts: 0,
-                    lastError: null,
-                },
+            const pendingJob = await prisma.domainEnrichmentJob.update({
+                where: { id: job.id },
+                data: { status: DomainEnrichmentJobStatus.PENDING },
             });
 
             // Act
@@ -784,36 +705,31 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
     });
 
     describe('requeueDomainEnrichmentJob - Real Database Tests', () => {
-        let testDomainId: string;
+        // let testDomainId: string;
         let testJobId: string;
         const MAX_BACKOFF_MIN = 60; // Should match your constant
 
-        beforeAll(async () => {
-            // Create test domain
-            const domain = await prisma.domain.create({
-                data: {
-                    hostname: 'requeue-test.example.com',
-                },
-            });
-            testDomainId = domain.id;
-        });
+        // beforeAll(async () => {
+        //     // Create test domain
+        //     const domain = await prisma.domain.create({
+        //         data: {
+        //             hostname: 'requeue-test.example.com',
+        //         },
+        //     });
+        //     testDomainId = domain.id;
+        // });
 
-        afterAll(async () => {
-            // Clean up
-            await prisma.domainEnrichmentJob.deleteMany({
-                where: { domainId: testDomainId },
-            });
-            await prisma.domain.delete({
-                where: { id: testDomainId },
-            });
-        });
+        // afterAll(async () => {
+        //     // Clean up
+        //     await prisma.domainEnrichmentJob.deleteMany({
+        //         where: { domainId: testDomainId },
+        //     });
+        //     await prisma.domain.delete({
+        //         where: { id: testDomainId },
+        //     });
+        // });
 
         beforeEach(async () => {
-            // Create a fresh job for each test
-            await prisma.domainEnrichmentJob.deleteMany({
-                where: { domainId: testDomainId },
-            });
-
             const job = await prisma.domainEnrichmentJob.create({
                 data: {
                     domainId: testDomainId,
