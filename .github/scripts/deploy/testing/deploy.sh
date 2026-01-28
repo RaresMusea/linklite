@@ -57,6 +57,9 @@ services:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \${POSTGRES_USER} -d \${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   app:
     image: ${IMAGE}
@@ -70,6 +73,17 @@ services:
         condition: service_healthy
     command: >
       sh -lc "pnpm prisma migrate deploy && pnpm start"
+
+  worker:
+    image: ${IMAGE}
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -lc "pnpm start:worker"
 
 volumes:
   pgdata:
