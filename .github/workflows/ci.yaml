@@ -45,15 +45,18 @@ jobs:
             echo "has_pr=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-
+          
           BRANCH="${GITHUB_REF#refs/heads/}"
           echo "Checking open PRs for branch: $BRANCH"
-
-          PRS=$(gh api \
-            repos/${{ github.repository }}/pulls \
-            -f state=open \
-            -f head=${{ github.repository_owner }}:"$BRANCH" \
-            --jq 'length')
+          
+          QUERY="repo:${{ github.repository }} is:pr is:open head:${{ github.repository_owner }}:$BRANCH"
+          PRS=$(gh api "search/issues?q=$QUERY" --jq '.total_count' 2>/dev/null || echo "0")
+          
+          if [ "$PRS" -gt 0 ]; then
+          echo "has_pr=true" >> $GITHUB_OUTPUT
+          else
+          echo "has_pr=false" >> $GITHUB_OUTPUT
+          fi
 
           if [ "$PRS" -gt 0 ]; then
             echo "has_pr=true" >> $GITHUB_OUTPUT
