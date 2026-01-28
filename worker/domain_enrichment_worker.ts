@@ -17,6 +17,20 @@ function minDate(a: Date, b: Date): Date {
     return a.getTime() <= b.getTime() ? a : b;
 }
 
+function msSince(startMs: number): number {
+    return Date.now() - startMs;
+}
+
+function normalizeError(error: unknown): Error {
+    if (error instanceof Error) return error;
+    if (typeof error === 'string') return new Error(error);
+    try {
+        return new Error(JSON.stringify(error));
+    } catch {
+        return new Error('Unknown error');
+    }
+}
+
 function getLockOrDefault(lock: Date | null): Date | null {
     const now = new Date();
 
@@ -70,8 +84,7 @@ async function main(): Promise<void> {
             await processDomainEnrichment(job.hostname, job.domainId);
             await markDomainEnrichmentJobAsDone(job.id);
         } catch (error) {
-            const normalizedError =
-                error instanceof Error ? error : new Error(typeof error === 'string' ? error : JSON.stringify(error));
+            const normalizedError = normalizeError(error);
             // TODO: Add logging and remove the console.error(...)
             console.error('Domain enrichment worker job failed:', { ...job, error });
             await requeueDomainEnrichmentJob({ jobId: job.id, attempts: job.attempts, error: normalizedError });
