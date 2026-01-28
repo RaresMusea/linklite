@@ -22,6 +22,37 @@ env:
   DATABASE_URL: ${{secrets.DATABASE_URL}}
 
 jobs:
+  should-run-on-push:
+    name: Detect open PR for branch
+    runs-on: ubuntu-latest
+    outputs:
+      has_pr: ${{ steps.pr.outputs.has_pr }}
+    steps:
+      - id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # On PR events, we don't want to block anything using has_pr
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "has_pr=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          echo "Checking open PRs for branch: $BRANCH"
+
+          PRS=$(gh api \
+            repos/${{ github.repository }}/pulls \
+            -f state=open \
+            -f head=${{ github.repository_owner }}:"$BRANCH" \
+            --jq 'length')
+
+          if [ "$PRS" -gt 0 ]; then
+            echo "has_pr=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_pr=false" >> $GITHUB_OUTPUT
+          fi
+
   pre-requisites:
     name: Pre-requisites (setup & install)
     runs-on: ubuntu-latest
@@ -47,7 +78,19 @@ jobs:
 
   checks:
     name: Checks (lint & typecheck)
-    needs: pre-requisites
+    needs:
+      - pre-requisites
+      - should-run-on-push
+    if: |
+      github.event_name == 'pull_request' ||
+      (
+        github.event_name == 'push' &&
+        (
+          github.ref == 'refs/heads/main' ||
+          github.ref == 'refs/heads/testing' ||
+          needs.should-run-on-push.outputs.has_pr == 'false'
+        )
+      )
     runs-on: ubuntu-latest
 
     steps:
@@ -80,7 +123,19 @@ jobs:
 
   ui-tests:
     name: UI Tests
-    needs: checks
+    needs:
+      - checks
+      - should-run-on-push
+    if: |
+      github.event_name == 'pull_request' ||
+      (
+        github.event_name == 'push' &&
+        (
+          github.ref == 'refs/heads/main' ||
+          github.ref == 'refs/heads/testing' ||
+          needs.should-run-on-push.outputs.has_pr == 'false'
+        )
+      )
     runs-on: ubuntu-latest
 
     steps:
@@ -107,7 +162,19 @@ jobs:
 
   unit-tests:
     name: Unit Tests
-    needs: checks
+    needs:
+      - checks
+      - should-run-on-push
+    if: |
+      github.event_name == 'pull_request' ||
+      (
+        github.event_name == 'push' &&
+        (
+          github.ref == 'refs/heads/main' ||
+          github.ref == 'refs/heads/testing' ||
+          needs.should-run-on-push.outputs.has_pr == 'false'
+        )
+      )
     runs-on: ubuntu-latest
 
     steps:
@@ -135,22 +202,59 @@ jobs:
       - name: Unit tests
         run: pnpm test:unit
 
+  integration-gate:
+    name: Decide whether the integration tests should run or not
+    runs-on: ubuntu-latest
+    needs:
+      - should-run-on-push
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Default: don't run
+          RUN="false"
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            REF="${{ github.ref }}"
+
+            # Always on main/testing pushes
+            if [ "$REF" = "refs/heads/main" ] || [ "$REF" = "refs/heads/testing" ]; then
+              RUN="true"
+            else
+              # Optional on push if no PR open + commit contains [run-it]
+              MSG="${{ github.event.head_commit.message }}"
+              if [ "${{ needs.should-run-on-push.outputs.has_pr }}" = "false" ] && echo "$MSG" | grep -q "\[run-it\]"; then
+                RUN="true"
+              fi
+            fi
+
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            # Run on PR only if LAST commit message contains [run-it]
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+
+            LAST_MSG=$(gh api \
+              repos/${{ github.repository }}/pulls/$PR_NUMBER/commits \
+              --jq '.[-1].commit.message')
+
+            if echo "$LAST_MSG" | grep -q "\[run-it\]"; then
+              RUN="true"
+            fi
+          fi
+
+          echo "run=$RUN" >> $GITHUB_OUTPUT
+
   integration-tests:
     name: Integration Tests (only push to testing/main)
-    needs: checks
+    needs:
+      - checks
+      - should-run-on-push
+      - integration-gate
     env:
-      DATABASE_URL: postgresql://linklite:linklite@localhost:5432/linklite_test
-    if: |
-      github.event_name == 'push' &&
-      (
-        github.ref == 'refs/heads/testing' ||
-        github.ref == 'refs/heads/main' ||
-        (
-          (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/feature/')) &&
-          contains(github.event.head_commit.message, '[run-it]')
-        )
-      )
-
+      DATABASE_URL: ${{secrets.DATABASE_URL}}
+    if: needs.integration-gate.outputs.run == 'true'
     runs-on: ubuntu-latest
 
     services:
