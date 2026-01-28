@@ -27,6 +27,9 @@ env:
 
 jobs:
   should-run-on-push:
+    permissions:
+      contents: read
+      pull-requests: read
     name: Detect open PR for branch
     runs-on: ubuntu-latest
     outputs:
