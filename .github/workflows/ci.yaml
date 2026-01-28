@@ -26,6 +26,7 @@ concurrency:
 env:
   DATABASE_URL: ${{secrets.DATABASE_URL}}
 
+
 jobs:
   should-run-on-push:
     permissions:
