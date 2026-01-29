@@ -43,3 +43,9 @@ export function parseDDMonYYYY(raw: string): Date | null {
 
     return Number.isNaN(d.getTime()) ? null : d;
 }
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+export function getDaysAgeFrom(d: Date): number {
+    return Math.floor((new Date().getTime() - d.getTime()) / MS_PER_DAY);
+}
