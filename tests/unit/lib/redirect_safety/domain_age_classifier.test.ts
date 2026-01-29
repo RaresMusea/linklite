@@ -26,6 +26,7 @@ describe('classifyDomainAge', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        mockGetDaysAgeFrom.mockReset();
     });
 
     describe('checkedAt validations', () => {
