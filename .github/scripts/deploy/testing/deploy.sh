@@ -99,7 +99,7 @@ sudo docker-compose -f docker-compose.testing.yml up -d db
 
 sudo docker-compose -f docker-compose.testing.yml run --rm app pnpm prisma migrate deploy
 
-sudo docker-compose -f docker-compose.testing.yml up -d --no-deps --force-recreate app
+sudo docker-compose -f docker-compose.testing.yml up -d --no-deps --force-recreate app worker
 
 echo "Waiting for app to respond: $URL"
 for i in {1..30}; do
