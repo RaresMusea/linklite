@@ -4,7 +4,10 @@ import {
     markDomainEnrichmentJobAsDone,
     requeueDomainEnrichmentJob,
 } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
-import { processDomainEnrichment } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.service';
+import {
+    generateDomainEnrichmentJobSummary,
+    processDomainEnrichment,
+} from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.service';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logging/logger';
 import { ClaimedDomainJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.types';
@@ -111,15 +114,17 @@ async function main(): Promise<void> {
                 continue;
             }
 
-            //TODO return statuses from processDomainEnrichment func
-            // Eg: { rdapStatus?: string; whoisStatus?: string }
-
             await processDomainEnrichment(job.hostname, job.domainId);
             await markDomainEnrichmentJobAsDone(job.id);
+            const summary = await generateDomainEnrichmentJobSummary(job.id);
 
             scopedJobLog.info('Job finished', {
                 result: 'DONE' satisfies DomainEnrichmentJobResult,
-                durationMs: Date.now() - startedAtMs,
+                durationMs: msSince(startedAtMs),
+                registeredAtFound: summary?.registeredAtFound ?? 'Unknown',
+                provider: summary?.provider ?? 'UNKNOWN',
+                domainStatus: summary?.domainStatus ?? 'UNKNOWN',
+                jobStatus: summary?.jobStatus ?? 'UNKNOWN',
             });
         } catch (error) {
             const normalizedError = normalizeError(error);
