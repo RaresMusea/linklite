@@ -18,3 +18,10 @@ export type RequeueDomainEnrichmentJobInput = {
     error: Error | string;
     runAfter?: Date;
 };
+
+export type DomainEnrichmentSummary = {
+    registeredAtFound: boolean;
+    provider: 'RDAP' | 'WHOIS' | 'UNKNOWN';
+    domainStatus: string;
+    jobStatus: string;
+};

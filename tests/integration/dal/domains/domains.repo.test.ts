@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { createLink } from '@/dal/links/links.repo';
 import { normalizeHostnameFromUrl } from '@/lib/utils';
 import {
+    getDomainById,
     getDomainProvidersLocks,
     updateDomainBestKnown,
     updateDomainRdap,
@@ -12,6 +13,8 @@ import {
 import { DomainSource, DomainStatus } from '@/generated/prisma/enums';
 import { RdapDomainParams, RdapStatus } from '@/lib/rdap/rdap.types';
 import { WhoisStatus } from '@/lib/whois/whois.types';
+import { Domain } from '@/generated/prisma/client';
+import { resetDb } from '@/tests/helpers/db';
 
 const mockedUtils = vi.hoisted(() => ({
     normalizeHostnameFromUrl: vi.fn(),
@@ -83,6 +86,435 @@ describe('Domain repo integration tests', () => {
             where: { hostname: mockHostname },
         });
         expect(updatedDomain?.firstSeenAt).toEqual(initialFirstSeen);
+    });
+
+    describe('Domain retrieval by ID - integration tests', () => {
+        let testDomains: Domain[] = [];
+
+        beforeAll(async () => {
+            await resetDb();
+        });
+
+        afterAll(async () => {
+            await resetDb();
+        });
+
+        beforeEach(async () => {
+            testDomains = await createTestDomains();
+        });
+
+        afterEach(async () => {
+            await resetDb();
+        });
+
+        async function createTestDomains(): Promise<Domain[]> {
+            return [
+                // Domain cu RDAP
+                await prisma.domain.create({
+                    data: {
+                        hostname: 'test-getbyid-rdap.example.com',
+                        source: DomainSource.RDAP,
+                        status: DomainStatus.OK,
+                        firstSeenAt: new Date('2024-01-15T10:00:00Z'),
+                        registeredAt: new Date('2020-05-20T00:00:00Z'),
+                        checkedAt: new Date('2024-01-20T14:30:00Z'),
+                        rdapRaw: {
+                            events: [
+                                {
+                                    eventAction: 'registration',
+                                    eventDate: '2020-05-20T00:00:00Z',
+                                },
+                            ],
+                            entities: [
+                                {
+                                    roles: ['registrant'],
+                                    vcardArray: ['vcard', [{ fn: 'Test Company' }]],
+                                },
+                            ],
+                        },
+                        rdapFetchedAt: new Date('2024-01-20T14:30:00Z'),
+                        whoisRaw: null,
+                        whoisFetchedAt: null,
+                        rdapFetchLockedUntil: null,
+                        whoisFetchLockedUntil: null,
+                    },
+                }),
+
+                // Domain cu WHOIS
+                await prisma.domain.create({
+                    data: {
+                        hostname: 'test-getbyid-whois.example.com',
+                        source: DomainSource.WHOIS,
+                        status: DomainStatus.OK,
+                        firstSeenAt: new Date('2024-01-16T09:15:00Z'),
+                        registeredAt: new Date('2019-11-10T00:00:00Z'),
+                        checkedAt: new Date('2024-01-21T11:45:00Z'),
+                        rdapFetchedAt: null,
+                        whoisRaw: `Domain Name: test-getbyid-whois.example.com
+Registry Domain ID: 1234567890_EXAMPLE_COM-VRSN
+Registrar WHOIS Server: whois.example.com
+Updated Date: 2023-12-01T00:00:00Z
+Creation Date: 2019-11-10T00:00:00Z
+Registrar Registration Expiration Date: 2025-11-10T00:00:00Z
+Registrar: Example Registrar Inc.
+Domain Status: clientTransferProhibited`,
+                        whoisFetchedAt: new Date('2024-01-21T11:45:00Z'),
+                        rdapFetchLockedUntil: null,
+                        whoisFetchLockedUntil: null,
+                    },
+                }),
+
+                // Domain cu status UNKNOWN
+                await prisma.domain.create({
+                    data: {
+                        hostname: 'test-getbyid-unknown.example.com',
+                        source: DomainSource.UNKNOWN,
+                        status: DomainStatus.UNKNOWN,
+                        firstSeenAt: new Date('2024-01-17T14:20:00Z'),
+                        registeredAt: null,
+                        checkedAt: null,
+                        rdapFetchedAt: null,
+                        whoisRaw: null,
+                        whoisFetchedAt: null,
+                        rdapFetchLockedUntil: null,
+                        whoisFetchLockedUntil: null,
+                    },
+                }),
+
+                await prisma.domain.create({
+                    data: {
+                        hostname: 'test-getbyid-status-ok.example.com',
+                        source: DomainSource.RDAP,
+                        status: DomainStatus.OK,
+                        firstSeenAt: new Date('2024-01-18T08:45:00Z'),
+                        registeredAt: new Date('2021-03-15T00:00:00Z'),
+                        checkedAt: new Date('2024-01-22T16:20:00Z'),
+                        rdapRaw: { test: 'data' },
+                        rdapFetchedAt: new Date('2024-01-22T16:20:00Z'),
+                        whoisRaw: null,
+                        whoisFetchedAt: null,
+                    },
+                }),
+
+                await prisma.domain.create({
+                    data: {
+                        hostname: 'test-getbyid-status-missing.example.com',
+                        source: DomainSource.WHOIS,
+                        status: DomainStatus.MISSING,
+                        firstSeenAt: new Date('2024-01-19T11:30:00Z'),
+                        registeredAt: null,
+                        checkedAt: new Date('2024-01-23T09:10:00Z'),
+                        rdapFetchedAt: null,
+                        whoisRaw: 'Domain not found in registry',
+                        whoisFetchedAt: new Date('2024-01-23T09:10:00Z'),
+                    },
+                }),
+
+                // Domain cu locks
+                await prisma.domain.create({
+                    data: {
+                        hostname: 'test-getbyid-with-locks.example.com',
+                        source: DomainSource.UNKNOWN,
+                        status: DomainStatus.UNKNOWN,
+                        firstSeenAt: new Date('2024-01-20T13:25:00Z'),
+                        rdapFetchLockedUntil: new Date(Date.now() + 3600000), // +1 hour
+                        whoisFetchLockedUntil: new Date(Date.now() + 1800000), // +30 minutes
+                    },
+                }),
+
+                await prisma.domain.create({
+                    data: {
+                        hostname: 'test-getbyid-complete.example.com',
+                        source: DomainSource.RDAP,
+                        status: DomainStatus.OK,
+                        firstSeenAt: new Date('2024-01-01T00:00:00Z'),
+                        registeredAt: new Date('2018-08-01T00:00:00Z'),
+                        checkedAt: new Date('2024-01-25T10:00:00Z'),
+                        rdapRaw: {
+                            handle: 'ABC123',
+                            name: 'Complete Domain',
+                            events: [
+                                { eventAction: 'registration', eventDate: '2018-08-01T00:00:00Z' },
+                                { eventAction: 'last changed', eventDate: '2023-12-01T00:00:00Z' },
+                            ],
+                        },
+                        rdapFetchedAt: new Date('2024-01-25T10:00:00Z'),
+                        whoisRaw: 'Domain name: complete.example.com\nStatus: active',
+                        whoisFetchedAt: new Date('2024-01-24T15:30:00Z'),
+                        rdapFetchLockedUntil: null,
+                        whoisFetchLockedUntil: new Date(Date.now() + 7200000), // +2 hours
+                    },
+                }),
+            ];
+        }
+
+        it('should retrieve a domain by ID with RDAP source', async () => {
+            const rdapDomain = testDomains[0];
+
+            const result = await getDomainById(rdapDomain.id);
+
+            expect(result).not.toBeNull();
+            expect(result?.id).toBe(rdapDomain.id);
+            expect(result?.hostname).toBe('test-getbyid-rdap.example.com');
+            expect(result?.source).toBe(DomainSource.RDAP);
+            expect(result?.status).toBe(DomainStatus.OK);
+            expect(result?.rdapRaw).toBeDefined();
+            expect(result?.rdapRaw).toHaveProperty('events');
+            expect(result?.rdapFetchedAt).toBeInstanceOf(Date);
+            expect(result?.whoisRaw).toBeNull();
+            expect(result?.firstSeenAt).toBeInstanceOf(Date);
+            expect(result?.registeredAt).toBeInstanceOf(Date);
+            expect(result?.checkedAt).toBeInstanceOf(Date);
+        });
+
+        it('should retrieve a domain by ID with WHOIS source', async () => {
+            const whoisDomain = testDomains[1];
+
+            const result = await getDomainById(whoisDomain.id);
+
+            expect(result).not.toBeNull();
+            expect(result?.id).toBe(whoisDomain.id);
+            expect(result?.hostname).toBe('test-getbyid-whois.example.com');
+            expect(result?.source).toBe(DomainSource.WHOIS);
+            expect(result?.status).toBe(DomainStatus.OK);
+            expect(result?.whoisRaw).toContain('test-getbyid-whois.example.com');
+            expect(result?.whoisFetchedAt).toBeInstanceOf(Date);
+            expect(result?.rdapRaw).toBeNull();
+            expect(result?.rdapFetchedAt).toBeNull();
+            expect(result?.registeredAt).toBeInstanceOf(Date);
+        });
+
+        it('should retrieve a domain by ID with UNKNOWN source and status', async () => {
+            const unknownDomain = testDomains[2];
+
+            const result = await getDomainById(unknownDomain.id);
+
+            expect(result).not.toBeNull();
+            expect(result?.id).toBe(unknownDomain.id);
+            expect(result?.hostname).toBe('test-getbyid-unknown.example.com');
+            expect(result?.source).toBe(DomainSource.UNKNOWN);
+            expect(result?.status).toBe(DomainStatus.UNKNOWN);
+            expect(result?.rdapRaw).toBeNull();
+            expect(result?.whoisRaw).toBeNull();
+            expect(result?.registeredAt).toBeNull();
+            expect(result?.checkedAt).toBeNull();
+            expect(result?.firstSeenAt).toBeInstanceOf(Date);
+        });
+
+        it('should handle all DomainStatus enum values correctly', async () => {
+            const okDomain = testDomains[3];
+            const missingDomain = testDomains[4];
+
+            // Test pentru OK status
+            const okResult = await getDomainById(okDomain.id);
+            expect(okResult?.status).toBe(DomainStatus.OK);
+            expect(okResult?.source).toBe(DomainSource.RDAP);
+
+            // Test pentru MISSING status
+            const missingResult = await getDomainById(missingDomain.id);
+            expect(missingResult?.status).toBe(DomainStatus.MISSING);
+            expect(missingResult?.source).toBe(DomainSource.WHOIS);
+            expect(missingResult?.whoisRaw).toBe('Domain not found in registry');
+        });
+
+        it('should retrieve domain with fetch locks', async () => {
+            const lockedDomain = testDomains[5];
+
+            const result = await getDomainById(lockedDomain.id);
+
+            expect(result).not.toBeNull();
+            expect(result?.rdapFetchLockedUntil).toBeInstanceOf(Date);
+            expect(result?.whoisFetchLockedUntil).toBeInstanceOf(Date);
+
+            // Verifică că lock-urile sunt în viitor
+            expect(result?.rdapFetchLockedUntil!.getTime()).toBeGreaterThan(Date.now());
+            expect(result?.whoisFetchLockedUntil!.getTime()).toBeGreaterThan(Date.now());
+        });
+
+        it('should retrieve complete domain with all fields populated', async () => {
+            const completeDomain = testDomains[6];
+
+            const result = await getDomainById(completeDomain.id);
+
+            expect(result).not.toBeNull();
+
+            expect(result?.hostname).toBe('test-getbyid-complete.example.com');
+            expect(result?.source).toBe(DomainSource.RDAP);
+            expect(result?.status).toBe(DomainStatus.OK);
+
+            expect(result?.firstSeenAt).toBeInstanceOf(Date);
+            expect(result?.registeredAt).toBeInstanceOf(Date);
+            expect(result?.checkedAt).toBeInstanceOf(Date);
+            expect(result?.createdAt).toBeInstanceOf(Date);
+            expect(result?.updatedAt).toBeInstanceOf(Date);
+
+            expect(result?.rdapRaw).toBeDefined();
+            expect(result?.rdapRaw).not.toBeNull();
+
+            if (
+                result?.rdapRaw &&
+                typeof result.rdapRaw === 'object' &&
+                !Array.isArray(result.rdapRaw)
+            ) {
+                const rdapRaw = result.rdapRaw as {
+                    handle?: string;
+                    name?: string;
+                    events?: unknown[];
+                };
+
+                expect(rdapRaw.handle).toBe('ABC123');
+                expect(rdapRaw.name).toBe('Complete Domain');
+                expect(rdapRaw.events).toBeDefined();
+                expect(Array.isArray(rdapRaw.events)).toBe(true);
+                expect(rdapRaw.events?.length).toBe(2);
+            } else {
+                // Dacă nu e un obiect, testul ar trebui să eșueze
+                expect(result?.rdapRaw).toBeInstanceOf(Object);
+            }
+
+            expect(result?.rdapFetchedAt).toBeInstanceOf(Date);
+
+            expect(result?.whoisRaw).toContain('complete.example.com');
+            expect(result?.whoisFetchedAt).toBeInstanceOf(Date);
+
+            expect(result?.rdapFetchLockedUntil).toBeNull();
+            expect(result?.whoisFetchLockedUntil).toBeInstanceOf(Date);
+            expect(result?.whoisFetchLockedUntil!.getTime()).toBeGreaterThan(Date.now());
+        });
+
+        it('should return null for non-existent domain ID', async () => {
+            const nonExistentId = 'non-existent-id-1234567890abcdef';
+
+            const result = await getDomainById(nonExistentId);
+
+            expect(result).toBeNull();
+        });
+
+        it('should handle empty string ID', async () => {
+            const result = await getDomainById('');
+
+            expect(result).toBeNull();
+        });
+
+        it('should handle invalid ID format', async () => {
+            const invalidId = 'not-a-valid-uuid-or-cuid';
+
+            const result = await getDomainById(invalidId);
+
+            expect(result).toBeNull();
+        });
+
+        it('should maintain data integrity for all retrieved fields', async () => {
+            const completeDomain = testDomains[6];
+
+            const result = await getDomainById(completeDomain.id);
+
+            // Verifică că datele sunt identice cu cele inserate
+            expect(result?.hostname).toBe(completeDomain.hostname);
+            expect(result?.source).toBe(completeDomain.source);
+            expect(result?.status).toBe(completeDomain.status);
+
+            // Verifică datele exacte
+            expect(result?.firstSeenAt?.toISOString()).toBe(completeDomain.firstSeenAt.toISOString());
+            expect(result?.registeredAt?.toISOString()).toBe(completeDomain.registeredAt?.toISOString());
+            expect(result?.checkedAt?.toISOString()).toBe(completeDomain.checkedAt?.toISOString());
+
+            // Verifică JSON fields
+            expect(JSON.stringify(result?.rdapRaw)).toBe(JSON.stringify(completeDomain.rdapRaw));
+            expect(result?.whoisRaw).toBe(completeDomain.whoisRaw);
+        });
+
+        it('should correctly handle domains with REDACTED and ERROR status', async () => {
+            // Crează domain suplimentar pentru REDACTED status
+            const redactedDomain = await prisma.domain.create({
+                data: {
+                    hostname: 'test-redacted-status.example.com',
+                    source: DomainSource.RDAP,
+                    status: DomainStatus.REDACTED,
+                    firstSeenAt: new Date(),
+                    rdapRaw: {
+                        remarks: [{ title: 'Data redacted for privacy' }],
+                    },
+                    rdapFetchedAt: new Date(),
+                },
+            });
+
+            // Crează domain suplimentar pentru ERROR status
+            const errorDomain = await prisma.domain.create({
+                data: {
+                    hostname: 'test-error-status.example.com',
+                    source: DomainSource.WHOIS,
+                    status: DomainStatus.ERROR,
+                    firstSeenAt: new Date(),
+                    whoisRaw: 'ERROR: Connection failed',
+                    whoisFetchedAt: new Date(),
+                },
+            });
+
+            try {
+                // Test REDACTED status
+                const redactedResult = await getDomainById(redactedDomain.id);
+                expect(redactedResult?.status).toBe(DomainStatus.REDACTED);
+                expect(redactedResult?.source).toBe(DomainSource.RDAP);
+                expect(redactedResult?.rdapRaw).toHaveProperty('remarks');
+
+                // Test ERROR status
+                const errorResult = await getDomainById(errorDomain.id);
+                expect(errorResult?.status).toBe(DomainStatus.ERROR);
+                expect(errorResult?.source).toBe(DomainSource.WHOIS);
+                expect(errorResult?.whoisRaw).toContain('ERROR');
+            } finally {
+                // Cleanup domain-urile adiționale
+                await prisma.domain.deleteMany({
+                    where: {
+                        id: {
+                            in: [redactedDomain.id, errorDomain.id],
+                        },
+                    },
+                });
+            }
+        });
+
+        it('should handle UNSUPPORTED domain status', async () => {
+            const unsupportedDomain = await prisma.domain.create({
+                data: {
+                    hostname: 'test-unsupported.example.com',
+                    source: DomainSource.UNKNOWN,
+                    status: DomainStatus.UNSUPPORTED,
+                    firstSeenAt: new Date(),
+                    rdapRaw: { error: 'TLD not supported' },
+                    rdapFetchedAt: new Date(),
+                },
+            });
+
+            try {
+                const result = await getDomainById(unsupportedDomain.id);
+
+                expect(result?.status).toBe(DomainStatus.UNSUPPORTED);
+                expect(result?.source).toBe(DomainSource.UNKNOWN);
+                expect(result?.rdapRaw).toHaveProperty('error', 'TLD not supported');
+            } finally {
+                await prisma.domain.delete({
+                    where: { id: unsupportedDomain.id },
+                });
+            }
+        });
+
+        it('should handle concurrent requests for different domains', async () => {
+            // Face request-uri simultane pentru toate domain-urile
+            const promises = testDomains.map((domain) => getDomainById(domain.id));
+
+            const results = await Promise.all(promises);
+
+            results.forEach((result, index) => {
+                expect(result).not.toBeNull();
+                expect(result?.id).toBe(testDomains[index].id);
+                expect(result?.hostname).toBe(testDomains[index].hostname);
+
+                expect(Object.values(DomainSource)).toContain(result?.source);
+                expect(Object.values(DomainStatus)).toContain(result?.status);
+            });
+        });
     });
 });
 

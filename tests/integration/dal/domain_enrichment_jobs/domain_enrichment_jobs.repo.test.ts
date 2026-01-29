@@ -1,14 +1,15 @@
 import { describe, beforeEach, it, expect, afterAll, vi, afterEach } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
+import { DomainEnrichmentJobStatus, DomainSource, DomainStatus } from '@/generated/prisma/enums';
 import {
     claimNextDomainEnrichmentJob,
+    getDomainEnrichmentJobById,
     markDomainEnrichmentJobAsDone,
     requeueDomainEnrichmentJob,
     upsertDomainEnrichmentJob,
 } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
 import { resetDb } from '@/tests/helpers/db';
-import { DomainEnrichmentJob } from '@/generated/prisma/client';
+import { Domain, DomainEnrichmentJob } from '@/generated/prisma/client';
 
 const testDomainId = 'test-integration-domain-id';
 
@@ -131,9 +132,10 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
         });
     });
 
-    describe('Claim next domain enrichhment job', () => {
+    describe('Claim next domain enrichment job', () => {
         let testDomainId1: string;
         let testDomainId2: string;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         let testDomainId3: string;
 
         beforeEach(async () => {
@@ -704,30 +706,10 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
         });
     });
 
-    describe('requeueDomainEnrichmentJob - Real Database Tests', () => {
+    describe('Requeue domain enrichment job', () => {
         // let testDomainId: string;
         let testJobId: string;
         const MAX_BACKOFF_MIN = 60; // Should match your constant
-
-        // beforeAll(async () => {
-        //     // Create test domain
-        //     const domain = await prisma.domain.create({
-        //         data: {
-        //             hostname: 'requeue-test.example.com',
-        //         },
-        //     });
-        //     testDomainId = domain.id;
-        // });
-
-        // afterAll(async () => {
-        //     // Clean up
-        //     await prisma.domainEnrichmentJob.deleteMany({
-        //         where: { domainId: testDomainId },
-        //     });
-        //     await prisma.domain.delete({
-        //         where: { id: testDomainId },
-        //     });
-        // });
 
         beforeEach(async () => {
             const job = await prisma.domainEnrichmentJob.create({
@@ -1163,6 +1145,456 @@ describe('Domain Enrichment Jobs repository integration tests', () => {
 
                 vi.useRealTimers();
             });
+        });
+    });
+
+    describe('Domain enrichment job retrieval by ID', () => {
+        let testDomains: Domain[] = [];
+        let testJobs: DomainEnrichmentJob[] = [];
+
+        afterAll(async () => {
+            await resetDb();
+        });
+
+        beforeEach(async () => {
+            await resetDb();
+            await createTestData();
+        });
+
+        afterEach(async () => {
+            await resetDb();
+        });
+
+        async function createTestData() {
+            const domainPromises: Promise<Domain>[] = [
+                prisma.domain.create({
+                    data: {
+                        hostname: 'test-job-domain-1.example.com',
+                        source: DomainSource.UNKNOWN,
+                        status: DomainStatus.UNKNOWN,
+                        firstSeenAt: new Date('2024-01-15T10:00:00Z'),
+                    },
+                }),
+
+                prisma.domain.create({
+                    data: {
+                        hostname: 'test-job-domain-2.example.com',
+                        source: DomainSource.RDAP,
+                        status: DomainStatus.OK,
+                        firstSeenAt: new Date('2024-01-16T09:15:00Z'),
+                        registeredAt: new Date('2020-01-01T00:00:00Z'),
+                    },
+                }),
+
+                prisma.domain.create({
+                    data: {
+                        hostname: 'test-job-domain-3.example.com',
+                        source: DomainSource.WHOIS,
+                        status: DomainStatus.OK,
+                        firstSeenAt: new Date('2024-01-17T14:20:00Z'),
+                        registeredAt: new Date('2019-05-10T00:00:00Z'),
+                        whoisRaw: 'Domain successfully enriched',
+                        whoisFetchedAt: new Date('2024-01-20T11:30:00Z'),
+                    },
+                }),
+
+                prisma.domain.create({
+                    data: {
+                        hostname: 'test-job-domain-4.example.com',
+                        source: DomainSource.UNKNOWN,
+                        status: DomainStatus.ERROR,
+                        firstSeenAt: new Date('2024-01-18T11:30:00Z'),
+                    },
+                }),
+
+                prisma.domain.create({
+                    data: {
+                        hostname: 'test-job-domain-5.example.com',
+                        source: DomainSource.UNKNOWN,
+                        status: DomainStatus.UNKNOWN,
+                        firstSeenAt: new Date('2024-01-19T13:25:00Z'),
+                    },
+                }),
+
+                prisma.domain.create({
+                    data: {
+                        hostname: 'test-job-domain-6.example.com',
+                        source: DomainSource.UNKNOWN,
+                        status: DomainStatus.UNKNOWN,
+                        firstSeenAt: new Date('2024-01-20T16:45:00Z'),
+                    },
+                }),
+            ];
+
+            testDomains = await Promise.all(domainPromises);
+
+            testJobs = await Promise.all([
+                prisma.domainEnrichmentJob.create({
+                    data: {
+                        domainId: testDomains[0].id,
+                        status: DomainEnrichmentJobStatus.PENDING,
+                        runAfter: new Date('2024-01-25T10:00:00Z'),
+                        attempts: 0,
+                        lastError: null,
+                        lockedUntil: null,
+                    },
+                    include: {
+                        domain: true,
+                    },
+                }),
+
+                // Job RUNNING cu lock
+                prisma.domainEnrichmentJob.create({
+                    data: {
+                        domainId: testDomains[1].id,
+                        status: DomainEnrichmentJobStatus.RUNNING,
+                        runAfter: new Date('2024-01-20T09:00:00Z'),
+                        attempts: 1,
+                        lastError: null,
+                        lockedUntil: new Date(Date.now() + 3600000), // +1 hour
+                    },
+                    include: {
+                        domain: true,
+                    },
+                }),
+
+                prisma.domainEnrichmentJob.create({
+                    data: {
+                        domainId: testDomains[2].id,
+                        status: DomainEnrichmentJobStatus.DONE,
+                        runAfter: new Date('2024-01-19T14:00:00Z'),
+                        attempts: 1,
+                        lastError: null,
+                        lockedUntil: null,
+                    },
+                    include: {
+                        domain: true,
+                    },
+                }),
+
+                prisma.domainEnrichmentJob.create({
+                    data: {
+                        domainId: testDomains[3].id,
+                        status: DomainEnrichmentJobStatus.ERROR,
+                        runAfter: new Date('2024-01-22T16:00:00Z'),
+                        attempts: 3,
+                        lastError: 'Failed to fetch RDAP data: Connection timeout',
+                        lockedUntil: null,
+                    },
+                    include: {
+                        domain: true,
+                    },
+                }),
+
+                prisma.domainEnrichmentJob.create({
+                    data: {
+                        domainId: testDomains[4].id,
+                        status: DomainEnrichmentJobStatus.PENDING,
+                        runAfter: new Date('2024-01-23T08:00:00Z'),
+                        attempts: 0,
+                        lastError: null,
+                        lockedUntil: new Date(Date.now() + 1800000), // +30 minutes
+                    },
+                    include: {
+                        domain: true,
+                    },
+                }),
+
+                prisma.domainEnrichmentJob.create({
+                    data: {
+                        domainId: testDomains[5].id,
+                        status: DomainEnrichmentJobStatus.PENDING,
+                        runAfter: new Date('2024-01-21T12:00:00Z'),
+                        attempts: 5,
+                        lastError: 'Multiple failures occurred',
+                        lockedUntil: new Date(Date.now() - 3600000), // -1 hour
+                    },
+                    include: {
+                        domain: true,
+                    },
+                }),
+            ]);
+        }
+
+        it('Should retrieve a PENDING job by ID with all fields', async () => {
+            const pendingJob = testJobs[0];
+
+            const result = await getDomainEnrichmentJobById(pendingJob.id);
+
+            expect(result).not.toBeNull();
+            expect(result?.id).toBe(pendingJob.id);
+            expect(result?.domainId).toBe(testDomains[0].id);
+            expect(result?.status).toBe(DomainEnrichmentJobStatus.PENDING);
+            expect(result?.attempts).toBe(0);
+            expect(result?.lastError).toBeNull();
+            expect(result?.lockedUntil).toBeNull();
+
+            expect(result?.runAfter).toBeInstanceOf(Date);
+            expect(result?.createdAt).toBeInstanceOf(Date);
+            expect(result?.updatedAt).toBeInstanceOf(Date);
+        });
+
+        it('Should retrieve a RUNNING job with lock', async () => {
+            const runningJob = testJobs[1];
+
+            const result = await getDomainEnrichmentJobById(runningJob.id);
+
+            expect(result).not.toBeNull();
+            expect(result?.id).toBe(runningJob.id);
+            expect(result?.status).toBe(DomainEnrichmentJobStatus.RUNNING);
+            expect(result?.attempts).toBe(1);
+            expect(result?.lastError).toBeNull();
+            expect(result?.lockedUntil).toBeInstanceOf(Date);
+            expect(result?.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
+        });
+
+        it('Should retrieve a DONE job (completed successfully)', async () => {
+            const doneJob = testJobs[2];
+
+            const result = await getDomainEnrichmentJobById(doneJob.id);
+
+            expect(result).not.toBeNull();
+            expect(result?.id).toBe(doneJob.id);
+            expect(result?.status).toBe(DomainEnrichmentJobStatus.DONE);
+            expect(result?.attempts).toBe(1);
+            expect(result?.lastError).toBeNull();
+            expect(result?.lockedUntil).toBeNull();
+            expect(result?.runAfter.getTime()).toBeLessThanOrEqual(Date.now());
+        });
+
+        it('Should retrieve an ERROR job with error message', async () => {
+            const errorJob = testJobs[3];
+
+            const result = await getDomainEnrichmentJobById(errorJob.id);
+
+            expect(result).not.toBeNull();
+            expect(result?.id).toBe(errorJob.id);
+            expect(result?.status).toBe(DomainEnrichmentJobStatus.ERROR);
+            expect(result?.attempts).toBe(3);
+            expect(result?.lastError).toBe('Failed to fetch RDAP data: Connection timeout');
+            expect(result?.lockedUntil).toBeNull();
+        });
+
+        it('Should retrieve a PENDING job with future lock', async () => {
+            const pendingLockedJob = testJobs[4];
+
+            const result = await getDomainEnrichmentJobById(pendingLockedJob.id);
+
+            expect(result).not.toBeNull();
+            expect(result?.id).toBe(pendingLockedJob.id);
+            expect(result?.status).toBe(DomainEnrichmentJobStatus.PENDING);
+            expect(result?.lockedUntil).toBeInstanceOf(Date);
+            expect(result?.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
+            expect(result?.attempts).toBe(0);
+            expect(result?.lastError).toBeNull();
+        });
+
+        it('Should retrieve a job with expired lock and multiple attempts', async () => {
+            const expiredLockJob = testJobs[5];
+
+            const result = await getDomainEnrichmentJobById(expiredLockJob.id);
+
+            expect(result).not.toBeNull();
+            expect(result?.id).toBe(expiredLockJob.id);
+            expect(result?.status).toBe(DomainEnrichmentJobStatus.PENDING);
+            expect(result?.attempts).toBe(5);
+            expect(result?.lastError).toBe('Multiple failures occurred');
+            expect(result?.lockedUntil).toBeInstanceOf(Date);
+            expect(result?.lockedUntil!.getTime()).toBeLessThan(Date.now());
+        });
+
+        it('Should return null for non-existent job ID', async () => {
+            const nonExistentId = 'non-existent-id-1234567890abcdef';
+
+            const result = await getDomainEnrichmentJobById(nonExistentId);
+
+            expect(result).toBeNull();
+        });
+
+        it('Should handle empty string ID', async () => {
+            const result = await getDomainEnrichmentJobById('');
+
+            expect(result).toBeNull();
+        });
+
+        it('Should handle invalid ID format', async () => {
+            const invalidId = 'not-a-valid-uuid-or-cuid';
+
+            const result = await getDomainEnrichmentJobById(invalidId);
+
+            expect(result).toBeNull();
+        });
+
+        it('Should maintain data integrity for retrieved job', async () => {
+            const testJob = testJobs[2]; // DONE job
+
+            const result = await getDomainEnrichmentJobById(testJob.id);
+
+            expect(result?.id).toBe(testJob.id);
+            expect(result?.domainId).toBe(testJob.domainId);
+            expect(result?.status).toBe(testJob.status);
+            expect(result?.attempts).toBe(testJob.attempts);
+            expect(result?.lastError).toBe(testJob.lastError);
+
+            expect(result?.runAfter.toISOString()).toBe(testJob.runAfter.toISOString());
+            if (result?.lockedUntil && testJob.lockedUntil) {
+                expect(result.lockedUntil.toISOString()).toBe(testJob.lockedUntil.toISOString());
+            } else {
+                expect(result?.lockedUntil).toBe(testJob.lockedUntil);
+            }
+        });
+
+        it('Should handle all DomainEnrichmentJobStatus enum values', async () => {
+            const statusJobs = testJobs.reduce(
+                (acc, job) => {
+                    acc[job.status] = job;
+                    return acc;
+                },
+                {} as Record<DomainEnrichmentJobStatus, DomainEnrichmentJob>
+            );
+
+            const pendingResult = await getDomainEnrichmentJobById(statusJobs.PENDING.id);
+            expect(pendingResult?.status).toBe(DomainEnrichmentJobStatus.PENDING);
+
+            const runningResult = await getDomainEnrichmentJobById(statusJobs.RUNNING.id);
+            expect(runningResult?.status).toBe(DomainEnrichmentJobStatus.RUNNING);
+
+            const doneResult = await getDomainEnrichmentJobById(statusJobs.DONE.id);
+            expect(doneResult?.status).toBe(DomainEnrichmentJobStatus.DONE);
+
+            const errorResult = await getDomainEnrichmentJobById(statusJobs.ERROR.id);
+            expect(errorResult?.status).toBe(DomainEnrichmentJobStatus.ERROR);
+        });
+
+        it('Should handle jobs with very long error messages', async () => {
+            const longErrorDomain = await prisma.domain.create({
+                data: {
+                    hostname: 'test-long-error.example.com',
+                    source: DomainSource.UNKNOWN,
+                    status: DomainStatus.UNKNOWN,
+                    firstSeenAt: new Date(),
+                },
+            });
+
+            const longErrorMessage =
+                'Error: '.repeat(100) +
+                'Failed after multiple attempts. Details: ' +
+                JSON.stringify({
+                    code: 'TIMEOUT',
+                    url: 'https://rdap.example.com/long/path/to/resource',
+                    attempts: 10,
+                });
+
+            const longErrorJob = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: longErrorDomain.id,
+                    status: DomainEnrichmentJobStatus.ERROR,
+                    runAfter: new Date(),
+                    attempts: 10,
+                    lastError: longErrorMessage,
+                    lockedUntil: null,
+                },
+            });
+
+            try {
+                const result = await getDomainEnrichmentJobById(longErrorJob.id);
+
+                expect(result).not.toBeNull();
+                expect(result?.status).toBe(DomainEnrichmentJobStatus.ERROR);
+                expect(result?.attempts).toBe(10);
+                expect(result?.lastError).toBe(longErrorMessage);
+                expect(result?.lastError?.length).toBe(longErrorMessage.length);
+            } finally {
+                // Cleanup
+                await prisma.domainEnrichmentJob.delete({
+                    where: { id: longErrorJob.id },
+                });
+                await prisma.domain.delete({
+                    where: { id: longErrorDomain.id },
+                });
+            }
+        });
+
+        it('Should handle jobs with future runAfter dates', async () => {
+            const futureDomain = await prisma.domain.create({
+                data: {
+                    hostname: 'test-future-run.example.com',
+                    source: DomainSource.UNKNOWN,
+                    status: DomainStatus.UNKNOWN,
+                    firstSeenAt: new Date(),
+                },
+            });
+
+            const futureDate = new Date(Date.now() + 86400000); // +1 day
+
+            const futureJob = await prisma.domainEnrichmentJob.create({
+                data: {
+                    domainId: futureDomain.id,
+                    status: DomainEnrichmentJobStatus.PENDING,
+                    runAfter: futureDate,
+                    attempts: 0,
+                    lastError: null,
+                    lockedUntil: null,
+                },
+            });
+
+            try {
+                const result = await getDomainEnrichmentJobById(futureJob.id);
+
+                expect(result).not.toBeNull();
+                expect(result?.runAfter.getTime()).toBe(futureDate.getTime());
+                expect(result?.runAfter.getTime()).toBeGreaterThan(Date.now());
+            } finally {
+                await prisma.domainEnrichmentJob.delete({
+                    where: { id: futureJob.id },
+                });
+                await prisma.domain.delete({
+                    where: { id: futureDomain.id },
+                });
+            }
+        });
+
+        it('Should handle concurrent requests for different jobs', async () => {
+            const promises = testJobs.map((job) => getDomainEnrichmentJobById(job.id));
+
+            const results = await Promise.all(promises);
+
+            results.forEach((result, index) => {
+                expect(result).not.toBeNull();
+                expect(result?.id).toBe(testJobs[index].id);
+                expect(result?.domainId).toBe(testJobs[index].domainId);
+                expect(result?.status).toBe(testJobs[index].status);
+
+                expect(Object.values(DomainEnrichmentJobStatus)).toContain(result?.status);
+            });
+        });
+
+        it('Should handle job with domain relation constraints', async () => {
+            const testJob = testJobs[0];
+
+            const result = await getDomainEnrichmentJobById(testJob.id);
+
+            expect(result).not.toBeNull();
+            expect(testDomains.map((d) => d.id)).toContain(result?.domainId);
+
+            const associatedDomain = await prisma.domain.findUnique({
+                where: { id: result!.domainId },
+            });
+
+            expect(associatedDomain).not.toBeNull();
+            expect(associatedDomain?.id).toBe(result?.domainId);
+        });
+
+        it('Should not include domain relation by default', async () => {
+            const testJob = testJobs[0];
+            const result = await getDomainEnrichmentJobById(testJob.id);
+
+            expect(result).not.toBeNull();
+            expect(result).toHaveProperty('id');
+            expect(result).toHaveProperty('domainId');
+            expect(result).toHaveProperty('status');
+            expect(result).toHaveProperty('runAfter');
+            expect(result).toHaveProperty('attempts');
         });
     });
 });
