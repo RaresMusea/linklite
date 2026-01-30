@@ -227,7 +227,7 @@ jobs:
         if: always()
         uses: dorny/test-reporter@v1
         with:
-          name: Unit Tests
+          name: Unit Tests Report
           path: reports/unit/junit.xml
           reporter: java-junit
           fail-on-error: false
