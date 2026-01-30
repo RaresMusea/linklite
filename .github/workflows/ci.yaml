@@ -306,6 +306,10 @@ jobs:
       - checks
       - should-run-on-push
       - integration-gate
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
     env:
       DATABASE_URL: ${{secrets.DATABASE_URL}}
     if: needs.integration-gate.outputs.run == 'true'
@@ -366,7 +370,7 @@ jobs:
         if: always()
         uses: dorny/test-reporter@v1
         with:
-          name: Intrgration tests
+          name: Integration tests
           path: reports/integration/junit.xml
           reporter: java-junit
           fail-on-error: false
