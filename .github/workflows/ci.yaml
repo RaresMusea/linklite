@@ -244,7 +244,7 @@ jobs:
           const md = [
             "## Unit test coverage",
             "",
-            "| Metric | % |",
+            "| Metric | Coverage (%) |",
             "|---|---:|",
             `| Lines | ${s.lines.pct}% |`,
             `| Statements | ${s.statements.pct}% |`,
