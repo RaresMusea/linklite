@@ -19,5 +19,10 @@ export default defineConfig({
         fileParallelism: false,
         maxConcurrency: 1,
         sequence: { concurrent: false },
+        coverage: {
+            provider: 'v8',
+            reportsDirectory: 'coverage/unit',
+            reporter: ['text', 'html', 'lcov', 'json-summary'],
+        },
     },
 });
