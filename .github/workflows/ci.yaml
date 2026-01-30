@@ -217,7 +217,16 @@ jobs:
         run: pnpm prisma generate
 
       - name: Unit tests
-        run: pnpm test:unit
+        run: pnpm test:unit-coverage
+
+      - name: Publish unit tests report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Unit Tests
+          path: reports/unit/junit.xml
+          reporter: vitest
+          fail-on-error: false
 
   integration-gate:
     name: Decide whether the integration tests should run or not
