@@ -143,6 +143,10 @@ jobs:
     needs:
       - checks
       - should-run-on-push
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
     if: |
       github.event_name == 'pull_request' ||
       (
@@ -174,7 +178,7 @@ jobs:
       - name: Install dependencies (uses cache)
         run: pnpm install --frozen-lockfile
 
-      - name: UI tests
+      - name: Run UI tests
         run: pnpm test:ui
 
       - name: Publish UI tests report
