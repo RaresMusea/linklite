@@ -1,7 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import path from 'node:path';
+import dotenv from 'dotenv';
 
 const root = path.resolve(__dirname);
+
+dotenv.config({ path: '.env.test' });
 
 export default defineConfig({
     root,
@@ -12,5 +15,10 @@ export default defineConfig({
         globals: true,
         environment: 'node',
         include: ['tests/unit/**/*.test.ts'],
+        coverage: {
+            provider: 'v8',
+            reportsDirectory: 'coverage/unit',
+            reporter: ['text', 'html', 'lcov', 'json-summary'],
+        },
     },
 });
