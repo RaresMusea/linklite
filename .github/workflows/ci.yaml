@@ -177,6 +177,39 @@ jobs:
       - name: UI tests
         run: pnpm test:ui
 
+      - name: Publish UI tests report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: UI Tests Report
+          path: reports/ui/junit.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Generate UI tests coverage summary
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const p = "coverage/ui/coverage-summary.json";
+          if (!fs.existsSync(p)) { console.log("No coverage summary found"); process.exit(0); }
+          const s = JSON.parse(fs.readFileSync(p, "utf8")).total;
+          
+          const md = [
+            "## UI tests coverage",
+            "",
+            "| Metric | Coverage (%) |",
+            "|---|---:|",
+            `| Lines | ${s.lines.pct}% |`,
+            `| Statements | ${s.statements.pct}% |`,
+            `| Functions | ${s.functions.pct}% |`,
+            `| Branches | ${s.branches.pct}% |`,
+            ""
+          ].join("\n");
+          
+          require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+          NODE
+
   unit-tests:
     name: Unit Tests
     permissions:
