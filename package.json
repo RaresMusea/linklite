@@ -16,7 +16,7 @@
         "test:watch": "vitest",
         "test:unit": "vitest run -c vitest.unit.config.ts --coverage",
         "test:integration": "vitest run -c vitest.integration.config.ts --coverage",
-        "test:ui": "vitest run -c vitest.ui.config.ts",
+        "test:ui": "vitest run -c vitest.ui.config.ts --coverage",
         "test:integration-local": "export RUN_WHOIS_INTEGRATION=1 && docker compose --env-file .env.test up -d db && bash -lc 'set -a; source .env.test; set +a; pnpm prisma migrate deploy && pnpm prisma generate && pnpm vitest run tests/integration'"
     },
     "dependencies": {
