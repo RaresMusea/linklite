@@ -225,7 +225,7 @@ jobs:
         with:
           name: Unit Tests
           path: reports/unit/junit.xml
-          reporter: vitest
+          reporter: java-junit
           fail-on-error: false
 
   integration-gate:
