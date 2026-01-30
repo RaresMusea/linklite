@@ -221,13 +221,13 @@ jobs:
         run: pnpm prisma generate
 
       - name: Run unit tests
-        run: pnpm test:unit-coverage
+        run: pnpm test:unit
 
       - name: Publish unit tests report
         if: always()
         uses: dorny/test-reporter@v1
         with:
-          name: Unit Tests
+          name: Unit Tests Report
           path: reports/unit/junit.xml
           reporter: java-junit
           fail-on-error: false
@@ -242,7 +242,7 @@ jobs:
           const s = JSON.parse(fs.readFileSync(p, "utf8")).total;
 
           const md = [
-            "## Unit test coverage",
+            "## Unit tests coverage",
             "",
             "| Metric | Coverage (%) |",
             "|---|---:|",
@@ -306,6 +306,10 @@ jobs:
       - checks
       - should-run-on-push
       - integration-gate
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
     env:
       DATABASE_URL: ${{secrets.DATABASE_URL}}
     if: needs.integration-gate.outputs.run == 'true'
@@ -357,11 +361,43 @@ jobs:
       - name: Run migrations
         run: pnpm prisma migrate deploy
 
-
-      - name: Integration tests
+      - name: Run integration tests
         env:
           RUN_WHOIS_INTEGRATION: "1"
         run: pnpm test:integration
+
+      - name: Publish integration tests report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Integration tests
+          path: reports/integration/junit.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Generate integration tests coverage summary
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const p = "coverage/integration/coverage-summary.json";
+          if (!fs.existsSync(p)) { console.log("No coverage summary found"); process.exit(0); }
+          const s = JSON.parse(fs.readFileSync(p, "utf8")).total;
+          
+          const md = [
+            "## Integration tests coverage",
+            "",
+            "| Metric | Coverage (%) |",
+            "|---|---:|",
+            `| Lines | ${s.lines.pct}% |`,
+            `| Statements | ${s.statements.pct}% |`,
+            `| Functions | ${s.functions.pct}% |`,
+            `| Branches | ${s.branches.pct}% |`,
+            ""
+          ].join("\n");
+          
+          require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+          NODE
 
   build:
     name: Build (only testing/main)
@@ -396,7 +432,7 @@ jobs:
         run: pnpm prisma generate
 
       - name: Build application
-        run: pnpm run build # Run build
+        run: pnpm run build
 
       - name: Build domain enrichment worker
         run: "pnpm run build:worker"
