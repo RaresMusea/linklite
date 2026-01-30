@@ -367,8 +367,8 @@ jobs:
         if: always()
         uses: dorny/test-reporter@v1
         with:
-          name: Unit Tests
-          path: reports/unit/junit.xml
+          name: Intrgration tests
+          path: reports/integration/junit.xml
           reporter: java-junit
           fail-on-error: false
 
