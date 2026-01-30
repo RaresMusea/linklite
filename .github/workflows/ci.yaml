@@ -179,6 +179,10 @@ jobs:
 
   unit-tests:
     name: Unit Tests
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
     needs:
       - checks
       - should-run-on-push
