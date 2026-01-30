@@ -220,7 +220,7 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm prisma generate
 
-      - name: Unit tests
+      - name: Run unit tests
         run: pnpm test:unit-coverage
 
       - name: Publish unit tests report
@@ -231,6 +231,28 @@ jobs:
           path: reports/unit/junit.xml
           reporter: java-junit
           fail-on-error: false
+
+      - name: Generate unit tests coverage summary
+        if: always()
+        run: |
+          node -e "
+          const fs=require('fs');
+          const p='coverage/unit/coverage-summary.json';
+          if(!fs.existsSync(p)) { console.log('No coverage summary found'); process.exit(0); }
+          const s=JSON.parse(fs.readFileSync(p,'utf8')).total;
+          const lines = [
+            '## Unit test coverage',
+            '',
+            '| Metric | % |',
+            '|---|---:|',
+            `| Lines | ${s.lines.pct}% |`,
+            `| Statements | ${s.statements.pct}% |`,
+            `| Functions | ${s.functions.pct}% |`,
+            `| Branches | ${s.branches.pct}% |`,
+            ''
+          ].join('\n');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines);
+          "
 
   integration-gate:
     name: Decide whether the integration tests should run or not
