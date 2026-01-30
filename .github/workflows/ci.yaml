@@ -428,7 +428,7 @@ jobs:
         run: pnpm prisma generate
 
       - name: Build application
-        run: pnpm run build # Run build
+        run: pnpm run build
 
       - name: Build domain enrichment worker
         run: "pnpm run build:worker"
