@@ -19,6 +19,9 @@ export default defineConfig({
         fileParallelism: false,
         maxConcurrency: 1,
         sequence: { concurrent: false },
+        outputFile: {
+            junit: 'reports/integration/junit.xml',
+        },
         coverage: {
             provider: 'v8',
             reportsDirectory: 'coverage/unit',

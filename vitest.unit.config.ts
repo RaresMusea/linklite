@@ -15,6 +15,9 @@ export default defineConfig({
         globals: true,
         environment: 'node',
         include: ['tests/unit/**/*.test.ts'],
+        outputFile: {
+            junit: 'reports/unit/junit.xml',
+        },
         coverage: {
             provider: 'v8',
             reportsDirectory: 'coverage/unit',

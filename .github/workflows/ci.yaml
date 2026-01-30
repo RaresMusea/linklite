@@ -221,7 +221,7 @@ jobs:
         run: pnpm prisma generate
 
       - name: Run unit tests
-        run: pnpm test:unit-coverage
+        run: pnpm test:unit
 
       - name: Publish unit tests report
         if: always()
@@ -356,7 +356,6 @@ jobs:
 
       - name: Run migrations
         run: pnpm prisma migrate deploy
-
 
       - name: Run integration tests
         env:
