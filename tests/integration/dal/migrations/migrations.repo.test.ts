@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import {
     countAppliedMigrations,
     countPendingMigrations,
+    getLastAppliedMigration,
     migrationsTableExists,
 } from '@/dal/migrations/migrations.repo';
 import { PrismaClient } from '@/generated/prisma/client';
@@ -368,7 +369,7 @@ describe('Database migrations repository integration tests', () => {
         });
     });
 
-    describe('Count applied migrations function', () => {
+    describe('Count applied migrations', () => {
         beforeEach(async () => {
             await testPrisma.$executeRaw`DROP TABLE IF EXISTS _prisma_migrations`;
             await testPrisma.$executeRaw`
@@ -624,6 +625,285 @@ describe('Database migrations repository integration tests', () => {
                 const newAppliedCount = await countAppliedMigrations();
 
                 expect(newAppliedCount).toBeLessThanOrEqual(totalMigrations + 1);
+            });
+        });
+    });
+
+    describe('Get last applied migration', () => {
+        beforeEach(async () => {
+            await testPrisma.$executeRaw`DROP TABLE IF EXISTS _prisma_migrations`;
+            await testPrisma.$executeRaw`
+            CREATE TABLE _prisma_migrations (
+                id VARCHAR(36) PRIMARY KEY,
+                checksum VARCHAR(64) NOT NULL,
+                finished_at TIMESTAMPTZ,
+                migration_name VARCHAR(255) NOT NULL,
+                logs TEXT,
+                rolled_back_at TIMESTAMPTZ,
+                started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                applied_steps_count INTEGER NOT NULL DEFAULT 0
+            )
+        `;
+        });
+
+        describe('When table does not exist', () => {
+            it('Should return null when migrations table does not exist', async () => {
+                await testPrisma.$executeRaw`DROP TABLE _prisma_migrations`;
+
+                const result = await getLastAppliedMigration();
+                expect(result).toBeNull();
+            });
+        });
+
+        describe('When table is empty', () => {
+            it('Should return null when there are no migrations in the table', async () => {
+                const result = await getLastAppliedMigration();
+                expect(result).toBeNull();
+            });
+        });
+
+        describe('When there are no applied migrations', () => {
+            it('Should return null when all migrations are pending', async () => {
+                await testPrisma.$executeRaw`
+                INSERT INTO _prisma_migrations (id, checksum, migration_name, started_at, applied_steps_count)
+                VALUES 
+                    ('uuid1', 'checksum1', '001_init', NOW(), 1),
+                    ('uuid2', 'checksum2', '002_add_users', NOW(), 1),
+                    ('uuid3', 'checksum3', '003_add_posts', NOW(), 1)
+            `;
+
+                const result = await getLastAppliedMigration();
+                expect(result).toBeNull();
+            });
+
+            it('Should return null when all migrations are rolled back', async () => {
+                await testPrisma.$executeRaw`
+                INSERT INTO _prisma_migrations (id, checksum, migration_name, rolled_back_at, started_at, applied_steps_count)
+                VALUES 
+                    ('uuid1', 'checksum1', '001_init', NOW(), NOW(), 1),
+                    ('uuid2', 'checksum2', '002_add_users', NOW(), NOW(), 1)
+            `;
+
+                const result = await getLastAppliedMigration();
+                expect(result).toBeNull();
+            });
+
+            it('Should return null when migrations have both finished_at and rolled_back_at', async () => {
+                await testPrisma.$executeRaw`
+                INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, rolled_back_at, started_at, applied_steps_count)
+                VALUES 
+                    ('uuid1', 'checksum1', '001_init', NOW(), NOW(), NOW(), 1),
+                    ('uuid2', 'checksum2', '002_add_users', NOW(), NOW(), NOW(), 1)
+            `;
+
+                const result = await getLastAppliedMigration();
+                expect(result).toBeNull();
+            });
+        });
+
+        describe('When there are applied migrations', () => {
+            it('Should return the most recently finished migration', async () => {
+                const now = new Date();
+                const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+
+                await testPrisma.$executeRaw`
+                INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, started_at, applied_steps_count)
+                VALUES 
+                    ('uuid1', 'checksum1', '001_init', ${twoDaysAgo}, ${twoDaysAgo}, 1),
+                    ('uuid2', 'checksum2', '002_add_users', ${yesterday}, ${yesterday}, 1),
+                    ('uuid3', 'checksum3', '003_add_posts', ${now}, ${now}, 1)
+            `;
+
+                const result = await getLastAppliedMigration();
+                expect(result).not.toBeNull();
+                expect(result!.migrationName).toBe('003_add_posts');
+                expect(result!.finishedAt).toEqual(now);
+                expect(result!.startedAt).toEqual(now);
+                expect(result!.appliedStepsCount).toBe(1);
+            });
+
+            it('Should ignore pending migrations when determining the last applied one', async () => {
+                const now = new Date();
+                const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+                await testPrisma.$executeRaw`
+                INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, started_at, applied_steps_count)
+                VALUES 
+                    ('uuid1', 'checksum1', '001_init', ${yesterday}, ${yesterday}, 1),
+                    ('uuid2', 'checksum2', '002_add_users', ${now}, ${now}, 1),
+                    ('uuid3', 'checksum3', '003_add_posts', NULL, ${now}, 1) -- pending
+            `;
+
+                const result = await getLastAppliedMigration();
+                expect(result).not.toBeNull();
+                expect(result!.migrationName).toBe('002_add_users');
+            });
+
+            it('Should ignore rolled back migrations when determining the last applied one', async () => {
+                const now = new Date();
+                const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+                await testPrisma.$executeRaw`
+                INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, rolled_back_at, started_at, applied_steps_count)
+                VALUES 
+                    ('uuid1', 'checksum1', '001_init', ${yesterday}, ${yesterday}, ${yesterday}, 1), -- rolled back
+                    ('uuid2', 'checksum2', '002_add_users', ${now}, NULL, ${now}, 1), -- applied
+                    ('uuid3', 'checksum3', '003_add_posts', ${now}, ${now}, ${now}, 1) -- rolled back
+            `;
+
+                const result = await getLastAppliedMigration();
+                expect(result).not.toBeNull();
+                expect(result!.migrationName).toBe('002_add_users');
+            });
+
+            it('Should handle migrations with the exact same finished_at timestamp', async () => {
+                const timestamp = new Date('2024-01-01T10:00:00Z');
+
+                await testPrisma.$executeRaw`
+                INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, started_at, applied_steps_count)
+                VALUES 
+                    ('uuid1', 'checksum1', '001_init', ${timestamp}, ${timestamp}, 1),
+                    ('uuid2', 'checksum2', '002_add_users', ${timestamp}, ${timestamp}, 1),
+                    ('uuid3', 'checksum3', '003_add_posts', ${timestamp}, ${timestamp}, 1)
+            `;
+
+                const result = await getLastAppliedMigration();
+                expect(result).not.toBeNull();
+                // Dacă toate au același finished_at, LIMIT 1 va returna unul arbitrar
+                // Testăm că returnează ceva valid
+                expect(['001_init', '002_add_users', '003_add_posts']).toContain(result!.migrationName);
+                expect(result!.finishedAt).toEqual(timestamp);
+            });
+        });
+
+        describe('Edge cases and data validation', () => {
+            it('Should return correct data structure', async () => {
+                const now = new Date();
+
+                await testPrisma.$executeRaw`
+                INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, started_at, applied_steps_count)
+                VALUES 
+                    ('uuid1', 'checksum1', '001_init', ${now}, ${now}, 5)
+            `;
+
+                const result = await getLastAppliedMigration();
+                expect(result).toEqual({
+                    migrationName: '001_init',
+                    startedAt: now,
+                    finishedAt: now,
+                    appliedStepsCount: 5,
+                });
+            });
+
+            it('Should handle migrations with special characters in names', async () => {
+                const now = new Date();
+
+                await testPrisma.$executeRaw`
+                INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, started_at, applied_steps_count)
+                VALUES 
+                    ('uuid1', 'checksum1', '001_init-with-dashes', ${now}, ${now}, 1),
+                    ('uuid2', 'checksum2', '002_add_underscores_and_CAPITALS', ${now}, ${now}, 1),
+                    ('uuid3', 'checksum3', '003_êmîgrâtïøn_ñámèß', ${now}, ${now}, 1)
+            `;
+
+                const result = await getLastAppliedMigration();
+                expect(result).not.toBeNull();
+                expect(result!.migrationName).toBeOneOf([
+                    '001_init-with-dashes',
+                    '002_add_underscores_and_CAPITALS',
+                    '003_êmîgrâtïøn_ñámèß',
+                ]);
+            });
+
+            it('Should handle migrations with different applied_steps_count values', async () => {
+                const now = new Date();
+
+                await testPrisma.$executeRaw`
+                INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, started_at, applied_steps_count)
+                VALUES 
+                    ('uuid1', 'checksum1', '001_init', NOW() - INTERVAL '2 hours', NOW() - INTERVAL '3 hours', 3),
+                    ('uuid2', 'checksum2', '002_add_users', NOW() - INTERVAL '1 hour', NOW() - INTERVAL '2 hours', 0),
+                    ('uuid3', 'checksum3', '003_add_posts', ${now}, ${now}, 15)
+            `;
+
+                const result = await getLastAppliedMigration();
+                expect(result).not.toBeNull();
+                expect(result!.migrationName).toBe('003_add_posts');
+                expect(result!.appliedStepsCount).toBe(15);
+            });
+        });
+
+        describe('Concurrent operations', () => {
+            it('Should provide consistent result during concurrent inserts', async () => {
+                // Adaugă câteva migrări aplicat inițiale
+                const initialTime = new Date('2024-01-01T10:00:00Z');
+                await testPrisma.$executeRaw`
+                INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, started_at, applied_steps_count)
+                VALUES 
+                    ('uuid1', 'checksum1', '001_init', ${initialTime}, ${initialTime}, 1),
+                    ('uuid2', 'checksum2', '002_add_users', ${initialTime}, ${initialTime}, 1)
+            `;
+
+                const initialResult = await getLastAppliedMigration();
+                expect(initialResult).not.toBeNull();
+
+                // Adaugă concurrent mai multe migrări
+                const laterTime = new Date('2024-01-01T11:00:00Z');
+                const insertPromises = Array.from(
+                    { length: 3 },
+                    (_, i) =>
+                        testPrisma.$executeRaw`
+                    INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, started_at, applied_steps_count)
+                    VALUES (${`new-uuid${i}`}, ${`new-checksum${i}`}, ${`00${i + 3}_migration`}, ${laterTime}, ${laterTime}, 1)
+                `
+                );
+
+                const readPromises = Array.from({ length: 5 }, () => getLastAppliedMigration());
+
+                await Promise.all([...insertPromises, ...readPromises]);
+
+                const finalResult = await getLastAppliedMigration();
+                expect(finalResult).not.toBeNull();
+                expect(finalResult!.migrationName).toMatch(/00[345]_migration/);
+            });
+        });
+
+        describe('Performance considerations', () => {
+            it('Should handle large number of migrations efficiently', async () => {
+                const migrations = Array.from({ length: 1000 }, (_, i) => {
+                    const migrationNumber = i + 1;
+                    return {
+                        id: `uuid${migrationNumber}`,
+                        checksum: `checksum${migrationNumber}`,
+                        name: `${String(migrationNumber).padStart(4, '0')}_migration`, // padStart(4, '0')
+                        started_at: new Date(Date.now() - (1000 - i) * 1000),
+                        finished_at: new Date(Date.now() - (1000 - i) * 1000 + 50000),
+                    };
+                });
+
+                for (let i = 0; i < migrations.length; i += 100) {
+                    const batch = migrations.slice(i, i + 100);
+                    const values = batch
+                        .map(
+                            (m) =>
+                                `('${m.id}', '${m.checksum}', '${m.name}', '${m.finished_at.toISOString()}', '${m.started_at.toISOString()}', 1)`
+                        )
+                        .join(', ');
+
+                    await testPrisma.$executeRawUnsafe(`
+                        INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, started_at, applied_steps_count) VALUES ${values}
+                    `);
+                }
+
+                const startTime = Date.now();
+                const result = await getLastAppliedMigration();
+                const endTime = Date.now();
+
+                expect(result).not.toBeNull();
+                expect(result!.migrationName).toBe('1000_migration'); // Fără leading zeros
+
+                expect(endTime - startTime).toBeLessThan(100);
             });
         });
     });
