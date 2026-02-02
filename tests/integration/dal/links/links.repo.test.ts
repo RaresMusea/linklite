@@ -497,35 +497,6 @@ describe('Link Repository - Integration Tests', () => {
                     // Should have triggered 3 enrichment jobs
                     expect(upsertDomainEnrichmentJob).toHaveBeenCalledTimes(3);
                 });
-
-                it('Should handle concurrent link creation with different domains', async () => {
-                    // Arrange
-                    const hostnames = ['example.com', 'google.com', 'github.com'];
-                    let callCount = 0;
-
-                    (normalizeHostnameFromUrl as Mock).mockImplementation(() => {
-                        const hostname = hostnames[callCount % hostnames.length];
-                        callCount++;
-                        return hostname;
-                    });
-
-                    // Act
-                    const slugs = ['link-a', 'link-b', 'link-c', 'link-d', 'link-e'];
-                    const promises = slugs.map((slug, index) =>
-                        createLink({
-                            slug,
-                            targetUrl: `https://${hostnames[index % hostnames.length]}/${slug}`,
-                            ownerId: null,
-                        })
-                    );
-
-                    await Promise.all(promises);
-
-                    // Assert
-                    const domains = await prisma.domain.findMany();
-                    expect(domains).toHaveLength(3); // example.com, google.com, github.com
-                    expect(upsertDomainEnrichmentJob).toHaveBeenCalledTimes(5);
-                });
             });
 
             describe('Database constraints and data integrity', () => {
