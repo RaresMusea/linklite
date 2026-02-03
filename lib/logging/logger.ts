@@ -16,13 +16,49 @@ function parseLogLevel(value: string | undefined, fallback: LogLevel): LogLevel 
     }
 }
 
-export class ServerLogger {
+type LoggerOpts<M extends LogMeta> = {
+    level?: LogLevel;
+    useColors?: boolean;
+    meta?: M;
+    tags?: string[];
+};
+
+export class ServerLogger<M extends LogMeta = LogMeta> {
     private readonly currentLogLevel: LogLevel;
     private readonly useColors: boolean;
 
-    constructor(opts?: { level?: LogLevel; useColors?: boolean }) {
+    private readonly baseMeta: M;
+    private readonly baseTags: string[];
+
+    constructor(opts?: LoggerOpts<M>) {
         this.currentLogLevel = opts?.level ?? parseLogLevel(process.env.LOG_LEVEL, LogLevel.INFO);
         this.useColors = opts?.useColors ?? Boolean(process.stdout.isTTY);
+
+        this.baseMeta = opts?.meta ?? ({} as M);
+        this.baseTags = opts?.tags ?? [];
+    }
+
+    child<N extends LogMeta>(meta?: N, tags?: string[]): ServerLogger<M & N> {
+        return new ServerLogger<M & N>({
+            level: this.currentLogLevel,
+            useColors: this.useColors,
+            meta: { ...this.baseMeta, ...(meta ?? {}) } as M & N,
+            tags: [...this.baseTags, ...(tags ?? [])],
+        });
+    }
+
+    with<N extends LogMeta>(meta: N, tags?: string[]): ServerLogger<M & N> {
+        return this.child(meta, tags);
+    }
+
+    component(path: string): ServerLogger<M & { component: string }> {
+        // this requires that component exists on the type (added by previous component() calls)
+        // but at runtime it might not exist - that's fine.
+        const prev = (this.baseMeta as Partial<{ component: unknown }>).component;
+        const prevStr = typeof prev === 'string' ? prev : undefined;
+
+        const next = prevStr ? `${prevStr}.${path}` : path;
+        return this.child({ component: next } as { component: string });
     }
 
     private levelName(level: LogLevel): string {
@@ -47,43 +83,26 @@ export class ServerLogger {
         return this.useColors ? '\x1b[0m' : '';
     }
 
-    private write(level: LogLevel, message: string, meta?: LogMeta, tags?: string[]): void {
-        if (level < this.currentLogLevel) return;
-
-        const timestamp = new Date().toISOString();
-        const levelName = this.levelName(level);
-
-        const payload = {
-            timestamp,
-            level: levelName,
-            message,
-            tags,
-            ...meta,
-        };
-
-        if (this.useColors) {
-            const c = this.color(level);
-            const tagStr = tags?.length ? ` [${tags.join(',')}]` : '';
-
-            let metaStr = '';
-            if (meta) {
-                metaStr =
-                    '\n' +
-                    this.formatMeta(meta)
-                        .split('\n')
-                        .map((line) => `  ${line}`)
-                        .join('\n');
-            }
-
-            console.log(`${c}[${timestamp}] [${levelName}]${tagStr} ${message}${this.reset()}${metaStr}`);
-            return;
+    private normalizeMeta(meta: LogMeta): unknown {
+        try {
+            return JSON.parse(
+                JSON.stringify(meta, (_, value) => {
+                    if (value instanceof Error) {
+                        return {
+                            name: value.name,
+                            message: value.message,
+                            stack: value.stack,
+                        };
+                    }
+                    return value;
+                })
+            );
+        } catch {
+            return '[unserializable meta]';
         }
-
-        // prod: JSON (CloudWatch / Loki / ELK friendly)
-        console.log(JSON.stringify(payload));
     }
 
-    private formatMeta(meta: LogMeta): string {
+    private formatMetaPretty(meta: LogMeta): string {
         try {
             return JSON.stringify(
                 meta,
@@ -97,34 +116,72 @@ export class ServerLogger {
                     }
                     return value;
                 },
-                2 // 👈 indent frumos
+                2
             );
         } catch {
             return '[unserializable meta]';
         }
     }
 
-    debug(message: string, meta?: LogMeta) {
-        this.write(LogLevel.DEBUG, message, meta);
-    }
-    info(message: string, meta?: LogMeta) {
-        this.write(LogLevel.INFO, message, meta);
-    }
-    warn(message: string, meta?: LogMeta) {
-        this.write(LogLevel.WARN, message, meta);
-    }
-    error(message: string, meta?: LogMeta) {
-        this.write(LogLevel.ERROR, message, meta);
+    private write(level: LogLevel, message: string, meta?: LogMeta, tags?: string[]): void {
+        if (level < this.currentLogLevel) return;
+
+        const timestamp = new Date().toISOString();
+        const levelName = this.levelName(level);
+
+        const mergedTags = [...this.baseTags, ...(tags ?? [])];
+        const mergedMeta = { ...this.baseMeta, ...(meta ?? {}) };
+
+        // If you want: treat empty tags as undefined
+        const tagsOut = mergedTags.length ? mergedTags : undefined;
+
+        if (this.useColors) {
+            const c = this.color(level);
+            const tagStr = tagsOut?.length ? ` [${tagsOut.join(',')}]` : '';
+
+            let metaStr = '';
+            const hasMeta = mergedMeta && Object.keys(mergedMeta).length > 0;
+            if (hasMeta) {
+                metaStr =
+                    '\n' +
+                    this.formatMetaPretty(mergedMeta)
+                        .split('\n')
+                        .map((line) => `  ${line}`)
+                        .join('\n');
+            }
+
+            console.log(`${c}[${timestamp}] [${levelName}]${tagStr} ${message}${this.reset()}${metaStr}`);
+            return;
+        }
+
+        // prod: JSON friendly
+        const payload = {
+            timestamp,
+            level: levelName,
+            message,
+            ...(tagsOut ? { tags: tagsOut } : {}),
+            ...(mergedMeta ? (this.normalizeMeta(mergedMeta) as object) : {}),
+        };
+
+        console.log(JSON.stringify(payload));
     }
 
-    with(meta: LogMeta, tags?: string[]) {
-        return {
-            debug: (msg: string, m?: LogMeta) => this.write(LogLevel.DEBUG, msg, { ...meta, ...m }, tags),
-            info: (msg: string, m?: LogMeta) => this.write(LogLevel.INFO, msg, { ...meta, ...m }, tags),
-            warn: (msg: string, m?: LogMeta) => this.write(LogLevel.WARN, msg, { ...meta, ...m }, tags),
-            error: (msg: string, m?: LogMeta) => this.write(LogLevel.ERROR, msg, { ...meta, ...m }, tags),
-        };
+    debug(message: string, meta?: LogMeta, tags?: string[]) {
+        this.write(LogLevel.DEBUG, message, meta, tags);
+    }
+    info(message: string, meta?: LogMeta, tags?: string[]) {
+        this.write(LogLevel.INFO, message, meta, tags);
+    }
+    warn(message: string, meta?: LogMeta, tags?: string[]) {
+        this.write(LogLevel.WARN, message, meta, tags);
+    }
+    error(message: string, meta?: LogMeta, tags?: string[]) {
+        this.write(LogLevel.ERROR, message, meta, tags);
     }
 }
 
-export const logger = new ServerLogger({ level: LogLevel.ERROR, useColors: true });
+// Example: default singleton
+export const logger = new ServerLogger({
+    level: parseLogLevel(process.env.LOG_LEVEL, LogLevel.INFO),
+    useColors: process.env.NODE_ENV !== 'production',
+});
