@@ -16,7 +16,7 @@ describe('GET /api/app/readyz (unit)', () => {
     it('Should return 200 with readiness payload when checkReady succeeds', async () => {
         vi.mocked(checkReady).mockResolvedValueOnce({
             ok: true,
-            migration: {
+            migrationDetails: {
                 migrationName: '002_add_table',
                 startedAt: new Date('2024-02-01T00:00:00Z'),
                 finishedAt: new Date('2024-02-01T00:00:00Z'),
@@ -31,8 +31,8 @@ describe('GET /api/app/readyz (unit)', () => {
 
         const body = await res.json();
         expect(body.ok).toBe(true);
-        expect(body.migration.migrationName).toBe('002_add_table');
-        expect(body.migration.appliedStepsCount).toBe(1);
+        expect(body.migrationDetails.migrationName).toBe('002_add_table');
+        expect(body.migrationDetails.appliedStepsCount).toBe(1);
     });
 
     it('Should return readiness error payload when ReadinessError is thrown (migrations)', async () => {

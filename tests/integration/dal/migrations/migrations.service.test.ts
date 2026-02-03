@@ -94,6 +94,10 @@ describe('Database migrations service integration tests', () => {
             const result = await checkReady();
 
             expect(result.ok).toBe(true);
+            if (!result.ok) {
+                throw new Error('Expected ok response');
+            }
+
             expect(result.migrationDetails?.migrationName).toBe('002_add_table');
             expect(result.migrationDetails?.finishedAt?.toISOString()).toBe('2024-02-01T00:00:00.000Z');
         });
