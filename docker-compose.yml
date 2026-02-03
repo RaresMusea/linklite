@@ -31,11 +31,21 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     command: >
       sh -lc "pnpm prisma migrate deploy &&
               pnpm start"
+
+  migrate:
+    build: *app_build
+    env_file: *common_env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -lc "pnpm prisma migrate deploy"
+    restart: "no"
 
   worker:
     build: *app_build
@@ -43,8 +53,8 @@ services:
     restart: unless-stopped
     env_file: *common_env
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     command: >
       sh -lc "pnpm start:worker"
 

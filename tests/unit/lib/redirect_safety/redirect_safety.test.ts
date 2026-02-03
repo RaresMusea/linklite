@@ -1,7 +1,7 @@
 // isAllowlisted.test.ts
 import { describe, it, expect } from 'vitest';
 import { TRUSTED_DOMAINS } from '@/lib/trusted_domains';
-import { isAllowlisted } from '@/lib/redirect_safety';
+import { isAllowlisted } from '@/lib/redirect_safety/redirect_safety';
 
 describe('isAllowlisted', () => {
     describe('Valid URLs - positive cases', () => {

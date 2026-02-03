@@ -1,9 +1,11 @@
 import {
-    ClaimedDomainJob, RequeueDomainEnrichmentJobInput,
+    ClaimedDomainJob,
+    RequeueDomainEnrichmentJobInput,
     UpsertDomainEnrichmentJobInput,
 } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.types';
 import { prisma } from '@/lib/prisma';
 import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
+import { DomainEnrichmentJob } from '@/generated/prisma/client';
 
 const LEASE_MS = 2 * 60_000; // 2 minutes
 const STALE_GRACE_MS = 0;
@@ -91,23 +93,30 @@ export async function requeueDomainEnrichmentJob(input: RequeueDomainEnrichmentJ
     const backoffMinutes = computeBackoffMinutes(input.attempts);
     const nextRun = input.runAfter ?? new Date(Date.now() + backoffMinutes * 60_000);
 
-    await prisma.domainEnrichmentJob.update(
-        {
-            where: {
-                id: input.jobId
-            },
-            data: {
-                status: DomainEnrichmentJobStatus.PENDING,
-                runAfter: nextRun,
-                lockedUntil: null,
-                lastError: input.error instanceof Error ? input.error.message : String(input.error),
-            }
-        }
-    )
+    await prisma.domainEnrichmentJob.update({
+        where: {
+            id: input.jobId,
+        },
+        data: {
+            status: DomainEnrichmentJobStatus.PENDING,
+            runAfter: nextRun,
+            lockedUntil: null,
+            lastError: input.error instanceof Error ? input.error.message : String(input.error),
+        },
+    });
+}
+
+export async function getDomainEnrichmentJobById(id: string): Promise<DomainEnrichmentJob | null> {
+    return prisma.domainEnrichmentJob.findFirst({
+        where: { id },
+        include: {
+            domain: false,
+        },
+    });
 }
 
 function computeBackoffMinutes(attempts: number): number {
     const exp = Math.min(attempts, 10);
 
-    return Math.min(MAX_BACKOFF_MIN, Math.max(1, 2 **exp));
+    return Math.min(MAX_BACKOFF_MIN, Math.max(1, 2 ** exp));
 }

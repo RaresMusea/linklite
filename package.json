@@ -14,10 +14,10 @@
         "test": "vitest",
         "test:run": "vitest run",
         "test:watch": "vitest",
-        "test:unit": "vitest run -c vitest.unit.config.ts",
-        "test:integration": "vitest run -c vitest.integration.config.ts",
-        "test:ui": "vitest run -c vitest.ui.config.ts",
-        "test:integration-local": "export RUN_WHOIS_INTEGRATION=1 && docker compose --env-file .env.test up -d db && bash -lc 'set -a; source .env.test; set +a; pnpm prisma migrate deploy && pnpm prisma generate && pnpm vitest run tests/integration'"
+        "test:unit": "vitest run -c vitest.unit.config.ts --coverage",
+        "test:integration": "vitest run -c vitest.integration.config.ts --coverage",
+        "test:ui": "vitest run -c vitest.ui.config.ts --coverage",
+        "test:integration-local": "export RUN_WHOIS_INTEGRATION=1 && docker compose --env-file .env.test up -d db && bash -lc 'set -a; source .env.test; set +a; pnpm prisma migrate reset --force && pnpm prisma generate && pnpm vitest run tests/integration'"
     },
     "dependencies": {
         "@prisma/adapter-pg": "^7.1.0",
@@ -31,7 +31,7 @@
         "dotenv": "^17.2.3",
         "framer-motion": "^12.23.26",
         "lucide-react": "^0.556.0",
-        "next": "16.0.10",
+        "next": "16.1.5",
         "next-themes": "^0.4.6",
         "pg": "^8.16.3",
         "react": "19.2.3",
