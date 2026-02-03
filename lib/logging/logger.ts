@@ -52,12 +52,14 @@ export class ServerLogger<M extends LogMeta = LogMeta> {
     }
 
     component(path: string): ServerLogger<M & { component: string }> {
-        // this requires that component exists on the type (added by previous component() calls)
-        // but at runtime it might not exist - that's fine.
         const prev = (this.baseMeta as Partial<{ component: unknown }>).component;
         const prevStr = typeof prev === 'string' ? prev : undefined;
 
-        const next = prevStr ? `${prevStr}.${path}` : path;
+        const next = prevStr
+            ? prevStr === path || prevStr.endsWith(`.${path}`)
+                ? prevStr
+                : `${prevStr}.${path}`
+            : path;
         return this.child({ component: next } as { component: string });
     }
 

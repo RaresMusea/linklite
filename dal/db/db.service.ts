@@ -3,9 +3,11 @@ import { ReadinessError } from '@/lib/errors/ReadinessError';
 import { logger } from '@/lib/logging/logger';
 import { withTimeout } from '@/lib/timeouts';
 
-const log = logger.with({ component: 'db.service.checkDbReachable' });
+let log = logger.component('db').component('service');
 
 export async function checkDbReachable(timeoutMs = 2000): Promise<void> {
+    log = log.component('checkDbReachable');
+
     try {
         await withTimeout(pingDb(), timeoutMs);
     } catch (err) {

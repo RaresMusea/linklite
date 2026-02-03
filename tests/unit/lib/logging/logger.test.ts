@@ -107,6 +107,16 @@ describe('Logger tests', () => {
         expect(payload.component).toBe('api.db');
     });
 
+    it('Does not duplicate consecutive component segments', () => {
+        const logger = new ServerLogger({ useColors: false, meta: { component: 'db' } });
+        const scoped = logger.component('db');
+
+        scoped.info('hello');
+
+        const payload = parsePayload(logSpy.mock.calls[0]);
+        expect(payload.component).toBe('db');
+    });
+
     it('Formats color output with tags and pretty meta', () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2020-01-02T03:04:05.000Z'));
