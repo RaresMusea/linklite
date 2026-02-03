@@ -13,3 +13,9 @@ export interface LoggerLike {
     warn(msg: string, meta?: LogMeta): void;
     error(msg: string, meta?: LogMeta): void;
 }
+
+export type LoggerBaseMeta = {
+    component?: string;
+    requestId?: string;
+    traceId?: string;
+};

@@ -11,11 +11,10 @@ import {
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logging/logger';
 import { ClaimedDomainJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.types';
-import { LoggerLike } from '@/lib/logging/logger.types';
 import { DomainEnrichmentJobResult } from '@/worker/domain_enrichment_worker_types';
 
 const IDLE_SLEEP_MS = 1000;
-const workerLog = logger.with({ component: 'worker.domain_enrichment' }, ['worker', 'domain-enrichment']);
+const workerLog = logger.component('worker.domain_enrichment').child(undefined, ['worker', 'domain-enrichment']);
 
 function sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -39,19 +38,13 @@ function normalizeError(error: unknown): Error {
     }
 }
 
-function getScopedClientJobLog(job: ClaimedDomainJob | null): LoggerLike {
-    if (!job) return logger;
-
-    return logger.with(
-        {
-            component: 'worker.domain_enrichment',
-            jobId: job.id,
-            domainId: job.domainId,
-            hostname: job.hostname,
-            attempt: job.attempts,
-        },
-        ['worker', 'domain-enrichment']
-    );
+function jobLogger(base: typeof workerLog, job: ClaimedDomainJob) {
+    return base.child({
+        jobId: job.id,
+        domainId: job.domainId,
+        hostname: job.hostname,
+        attempt: job.attempts,
+    });
 }
 
 function getLockOrDefault(lock: Date | null): Date | null {
@@ -91,14 +84,14 @@ async function main(): Promise<void> {
         }
 
         const startedAtMs = Date.now();
-        const scopedJobLog = getScopedClientJobLog(job);
-        scopedJobLog.debug('Job claimed');
+        const jobLog = jobLogger(workerLog, job).component('job');
+        jobLog.info('Job claimed');
 
         try {
             const runAfter = await getNextAllowedRunAfter(job.domainId);
 
             if (runAfter) {
-                scopedJobLog.warn('Provider locked. Attempting to requeue job', {
+                jobLog.warn('Provider locked. Attempting to requeue job', {
                     result: 'FAILED' satisfies DomainEnrichmentJobResult,
                     durationMs: msSince(startedAtMs),
                     runAfter: runAfter.toISOString(),
@@ -118,7 +111,7 @@ async function main(): Promise<void> {
             await markDomainEnrichmentJobAsDone(job.id);
             const summary = await generateDomainEnrichmentJobSummary(job.id);
 
-            scopedJobLog.info('Job finished', {
+            jobLog.info('Job finished', {
                 result: 'DONE' satisfies DomainEnrichmentJobResult,
                 durationMs: msSince(startedAtMs),
                 registeredAtFound: summary?.registeredAtFound ?? 'Unknown',
@@ -129,7 +122,7 @@ async function main(): Promise<void> {
         } catch (error) {
             const normalizedError = normalizeError(error);
 
-            scopedJobLog.error('Job failed', {
+            jobLog.error('Job failed', {
                 result: 'FAILED' satisfies DomainEnrichmentJobResult,
                 durationMs: Date.now() - startedAtMs,
                 error: error,
