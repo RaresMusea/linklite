@@ -3,6 +3,7 @@ import { countPendingMigrations, getLastAppliedMigration } from '@/dal/migration
 import { logger } from '@/lib/logging/logger';
 import { ReadinessError } from '@/lib/errors/ReadinessError';
 import { checkDbReachable } from '@/dal/db/db.service';
+import { AppReadinessResponse } from '@/app/api/app/readyz/app_readines_response';
 
 const log = logger.with({ component: 'migrations.service' });
 
@@ -21,8 +22,8 @@ export async function checkDbMigrations(): Promise<MigrationDetails | null> {
     return lastMigration ?? null;
 }
 
-export async function checkReady() {
+export async function checkReady(): Promise<AppReadinessResponse> {
     await checkDbReachable();
     const migration = await checkDbMigrations();
-    return { ok: true as const, migration };
+    return { ok: true as const, migrationDetails: migration };
 }

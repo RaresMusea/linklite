@@ -70,7 +70,7 @@ describe('Check database readiness unit tests', () => {
         vi.mocked(countPendingMigrations).mockResolvedValue(0);
         vi.mocked(getLastAppliedMigration).mockResolvedValue(migration);
 
-        await expect(checkReady()).resolves.toEqual({ ok: true, migration });
+        await expect(checkReady()).resolves.toEqual({ ok: true, migrationDetails: migration });
         expect(checkDbReachable).toHaveBeenCalledTimes(1);
     });
 
