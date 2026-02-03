@@ -32,7 +32,10 @@ export class ServerLogger<M extends LogMeta = LogMeta> {
 
     constructor(opts?: LoggerOpts<M>) {
         this.currentLogLevel = opts?.level ?? parseLogLevel(process.env.LOG_LEVEL, LogLevel.INFO);
-        this.useColors = opts?.useColors ?? Boolean(process.stdout.isTTY);
+        const format = (process.env.LOG_FORMAT ?? '').toLowerCase();
+        const forcePretty = format === 'pretty' || format === 'color';
+        const forceJson = format === 'json';
+        this.useColors = opts?.useColors ?? (forcePretty ? true : forceJson ? false : Boolean(process.stdout.isTTY));
 
         this.baseMeta = opts?.meta ?? ({} as M);
         this.baseTags = opts?.tags ?? [];
@@ -134,35 +137,47 @@ export class ServerLogger<M extends LogMeta = LogMeta> {
         const mergedTags = [...this.baseTags, ...(tags ?? [])];
         const mergedMeta = { ...this.baseMeta, ...(meta ?? {}) };
 
-        // If you want: treat empty tags as undefined
         const tagsOut = mergedTags.length ? mergedTags : undefined;
 
+        // Pretty output (dev / tty / forced)
         if (this.useColors) {
             const c = this.color(level);
-            const tagStr = tagsOut?.length ? ` [${tagsOut.join(',')}]` : '';
+            const tagStr = tagsOut?.length ? ` [${tagsOut.join(', ')}]` : '';
 
-            let metaStr = '';
-            const hasMeta = mergedMeta && Object.keys(mergedMeta).length > 0;
-            if (hasMeta) {
-                metaStr =
-                    '\n' +
-                    this.formatMetaPretty(mergedMeta)
-                        .split('\n')
-                        .map((line) => `  ${line}`)
-                        .join('\n');
-            }
+            // Avoid duplicating info already shown on the main line
+            const prettyMeta: Record<string, unknown> = { ...mergedMeta };
+            delete prettyMeta.component; // component is usually visible/known via logger.component(...)
+            // delete prettyMeta.tags; // only if you ever put tags into meta (you don't right now)
+
+            const hasPrettyMeta = Object.keys(prettyMeta).length > 0;
+
+            const metaStr = hasPrettyMeta
+                ? '\n' +
+                  this.formatMetaPretty(prettyMeta as LogMeta)
+                      .split('\n')
+                      .map((line) => `  ${line}`)
+                      .join('\n')
+                : '';
 
             console.log(`${c}[${timestamp}] [${levelName}]${tagStr} ${message}${this.reset()}${metaStr}`);
             return;
         }
 
-        // prod: JSON friendly
+        // JSON output (prod / non-tty / forced)
+        const normalized = this.normalizeMeta(mergedMeta);
+
+        // normalizeMeta can return a string fallback; keep it safe for spreading
+        const metaObj =
+            normalized && typeof normalized === 'object' && !Array.isArray(normalized)
+                ? (normalized as Record<string, unknown>)
+                : { meta: normalized };
+
         const payload = {
             timestamp,
             level: levelName,
             message,
             ...(tagsOut ? { tags: tagsOut } : {}),
-            ...(mergedMeta ? (this.normalizeMeta(mergedMeta) as object) : {}),
+            ...metaObj,
         };
 
         console.log(JSON.stringify(payload));
@@ -185,5 +200,4 @@ export class ServerLogger<M extends LogMeta = LogMeta> {
 // Example: default singleton
 export const logger = new ServerLogger({
     level: parseLogLevel(process.env.LOG_LEVEL, LogLevel.INFO),
-    useColors: process.env.NODE_ENV !== 'production',
 });

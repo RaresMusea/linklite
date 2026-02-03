@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ServerLogger } from '@/lib/logging/logger';
 
 const ORIGINAL_LOG_LEVEL = process.env.LOG_LEVEL;
+const ORIGINAL_LOG_FORMAT = process.env.LOG_FORMAT;
 
 type LogPayload = Record<string, unknown> & {
     level?: string;
@@ -31,6 +32,14 @@ function restoreLogLevel() {
     }
 }
 
+function restoreLogFormat() {
+    if (ORIGINAL_LOG_FORMAT === undefined) {
+        delete process.env.LOG_FORMAT;
+    } else {
+        process.env.LOG_FORMAT = ORIGINAL_LOG_FORMAT;
+    }
+}
+
 describe('Logger tests', () => {
     let logSpy: ReturnType<typeof vi.spyOn>;
 
@@ -41,6 +50,7 @@ describe('Logger tests', () => {
     afterEach(() => {
         logSpy.mockRestore();
         restoreLogLevel();
+        restoreLogFormat();
         vi.useRealTimers();
     });
 
@@ -130,5 +140,27 @@ describe('Logger tests', () => {
         expect(line).toContain('[2020-01-02T03:04:05.000Z] [INFO] [tag1] hello');
         expect(line).toContain('\x1b[0m');
         expect(line).toContain('\n  {\n    "x": 1\n  }');
+    });
+
+    it('Forces pretty output when LOG_FORMAT=pretty', () => {
+        process.env.LOG_FORMAT = 'pretty';
+
+        const logger = new ServerLogger();
+        logger.info('hello');
+
+        expect(logSpy).toHaveBeenCalledTimes(1);
+        const line = String(logSpy.mock.calls[0][0]);
+        expect(line).toContain('[INFO]');
+    });
+
+    it('Forces json output when LOG_FORMAT=json', () => {
+        process.env.LOG_FORMAT = 'json';
+
+        const logger = new ServerLogger();
+        logger.info('hello');
+
+        expect(logSpy).toHaveBeenCalledTimes(1);
+        const payload = parsePayload(logSpy.mock.calls[0]);
+        expect(payload.level).toBe('INFO');
     });
 });
