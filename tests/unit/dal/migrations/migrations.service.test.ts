@@ -6,6 +6,10 @@ vi.mock('@/dal/migrations/migrations.repo', () => ({
     getLastAppliedMigration: vi.fn(),
 }));
 
+vi.mock('@/dal/db/db.service', () => ({
+    checkDbReachable: vi.fn(),
+}));
+
 vi.mock('@/lib/logging/logger', () => ({
     logger: {
         with: () => ({
@@ -16,7 +20,8 @@ vi.mock('@/lib/logging/logger', () => ({
 }));
 
 import { countPendingMigrations, getLastAppliedMigration } from '@/dal/migrations/migrations.repo';
-import { checkDbMigrations } from '@/dal/migrations/migrations.service';
+import { checkDbMigrations, checkReady } from '@/dal/migrations/migrations.service';
+import { checkDbReachable } from '@/dal/db/db.service';
 
 const mockMigration = {
     migrationName: '002_add_table',
@@ -51,5 +56,56 @@ describe('Check database migrations unit tests', () => {
 
         await expect(checkDbMigrations()).resolves.toEqual(mockMigration);
         expect(getLastAppliedMigration).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('Check database readiness unit tests', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('Should return ok true with migration when dependencies succeed', async () => {
+        vi.mocked(checkDbReachable).mockResolvedValue(undefined);
+        const migration = { ...mockMigration };
+        vi.mocked(countPendingMigrations).mockResolvedValue(0);
+        vi.mocked(getLastAppliedMigration).mockResolvedValue(migration);
+
+        await expect(checkReady()).resolves.toEqual({ ok: true, migration });
+        expect(checkDbReachable).toHaveBeenCalledTimes(1);
+    });
+
+    it('Should propagate ReadinessError when checkDbReachable fails', async () => {
+        const err = new ReadinessError('database', 'Database not reachable');
+        vi.mocked(checkDbReachable).mockRejectedValueOnce(err);
+        const checkDbMigrationsSpy = vi.spyOn(
+            await import('@/dal/migrations/migrations.service'),
+            'checkDbMigrations'
+        );
+
+        try {
+            await checkReady();
+            expect.fail('Expected checkReady to throw');
+        } catch (error) {
+            expect(error).toBe(err);
+            expect(error).toBeInstanceOf(ReadinessError);
+            expect((error as ReadinessError).reason).toBe('database');
+            expect((error as ReadinessError).message).toBe('Database not reachable');
+        }
+        expect(checkDbMigrationsSpy).not.toHaveBeenCalled();
+    });
+
+    it('Should propagate ReadinessError when checkDbMigrations fails', async () => {
+        vi.mocked(checkDbReachable).mockResolvedValue(undefined);
+        vi.mocked(countPendingMigrations).mockResolvedValue(2);
+
+        try {
+            await checkReady();
+            expect.fail('Expected checkReady to throw');
+        } catch (error) {
+            expect(error).toBeInstanceOf(ReadinessError);
+            expect((error as ReadinessError).reason).toBe('migrations');
+            expect((error as ReadinessError).message).toBe('Database has 2 unfinished migrations');
+        }
+        expect(checkDbReachable).toHaveBeenCalledTimes(1);
     });
 });
