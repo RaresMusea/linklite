@@ -3,7 +3,7 @@ import { countPendingMigrations, getLastAppliedMigration } from '@/dal/migration
 import { logger } from '@/lib/logging/logger';
 import { ReadinessError } from '@/lib/errors/ReadinessError';
 import { checkDbReachable } from '@/dal/db/db.service';
-import { AppReadinessResponse } from '@/app/api/app/readyz/app_readines_response';
+import { AppReadinessResponse } from '@/app/api/app/readyz/route';
 
 const log = logger.with({ component: 'migrations.service' });
 
