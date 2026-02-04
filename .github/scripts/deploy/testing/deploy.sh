@@ -10,8 +10,12 @@ LOG_LEVEL=INFO
 LOG_FORMAT=pretty
 
 : "${IMAGE_TAG:?IMAGE_TAG is required}"
-IMAGE="ghcr.io/${GHCR_USER}/linklite:${IMAGE_TAG}"
+IMAGE_BASE="ghcr.io/${GHCR_USER}/linklite"
+REMOTE_IMAGE="${IMAGE_BASE}:${IMAGE_TAG}"
+
 APP_COMMIT_SHA="${IMAGE_TAG#testing-}"
+LOCAL_CURRENT="${IMAGE_BASE}:testing-current"
+LOCAL_PREVIOUS="${IMAGE_BASE}:testing-previous"
 
 cd "$APP_DIR"
 
@@ -66,7 +70,7 @@ services:
       retries: 20
 
   app:
-    image: ${IMAGE}
+    image: ${LOCAL_CURRENT}
     restart: unless-stopped
     env_file:
       - .env
@@ -79,7 +83,7 @@ services:
       sh -lc "pnpm prisma migrate deploy && pnpm start"
 
   worker:
-    image: ${IMAGE}
+    image: ${LOCAL_CURRENT}
     restart: unless-stopped
     env_file:
       - .env
@@ -93,11 +97,29 @@ volumes:
   pgdata:
 EOF
 
+OLD_COMMIT=""
+if curl -fsS --max-time 3 "$URL" >/tmp/healthz_old.json 2>/dev/null; then
+  OLD_COMMIT=$(grep -oE '"commit"\s*:\s*"[^"]+"' /tmp/healthz_old.json | head -n1 | sed -E 's/.*"commit"\s*:\s*"([^"]+)".*/\1/')
+fi
+
+echo "Old commit: ${OLD_COMMIT:-<none>}"
+
 echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
-echo "Deploying image: $IMAGE"
+echo "Deploying remote image: $REMOTE_IMAGE"
 
-docker pull "$IMAGE"
+docker pull "$REMOTE_IMAGE"
+
+# Mark actual local version as previous (prepare deployment)
+if sudo docker image inspect "$LOCAL_CURRENT" >/dev/null 2>&1; then
+  CURR_ID=$(sudo docker image inspect "$LOCAL_CURRENT" --format '{{.Id}}')
+  sudo docker tag "$CURR_ID" "$LOCAL_PREVIOUS" || true
+  echo "Tagged previous version: $LOCAL_PREVIOUS"
+fi
+
+# The SHA becomes current image tag (actual deploy)
+sudo docker tag "$REMOTE_IMAGE" "$LOCAL_CURRENT"
+echo "Tagged current version: $LOCAL_CURRENT"
 
 sudo docker-compose -f docker-compose.testing.yml up -d db
 
@@ -106,19 +128,58 @@ sudo docker-compose -f docker-compose.testing.yml run --rm app pnpm prisma migra
 sudo docker-compose -f docker-compose.testing.yml up -d --no-deps --force-recreate app worker
 
 echo "Waiting for app to respond: $URL"
+SMOKE_OK="0"
 for i in {1..30}; do
-  if curl -fsS --max-time 3 "$URL" > /dev/null; then
-    echo "Smoke check OK"
-    exit 0
+  if curl -fsS --max-time 3 "$URL" >/tmp/healthz_new.json 2>/dev/null; then
+    NEW_COMMIT=$(grep -oE '"commit"\s*:\s*"[^"]+"' /tmp/healthz_new.json | head -n1 | sed -E 's/.*"commit"\s*:\s*"([^"]+)".*/\1/')
+
+    if [ -z "$OLD_COMMIT" ]; then
+      echo "Smoke check OK (reachable; no old commit)"
+      SMOKE_OK="1"
+      break
+    fi
+
+   if [ -n "${NEW_COMMIT:-}" ] && [ "$NEW_COMMIT" != "$OLD_COMMIT" ]; then
+     echo "Smoke check OK (commit changed: $OLD_COMMIT -> $NEW_COMMIT)"
+     SMOKE_OK="1"
+     break
+   fi
+  echo "Health reachable but commit SHA not changed yet (old=$OLD_COMMIT new=${NEW_COMMIT:-<missing>})"
   fi
   sleep 2
 done
 
-echo "Smoke check FAILED"
-echo "Last attempt details:"
-curl -v --max-time 10 "$URL" || true
+if [ "$SMOKE_OK" != "1" ]; then
+  echo "Smoke check FAILED"
+  curl -v --max-time 10 "$URL" || true
+  echo "Fetching health payload (if reachable):"
+  cat /tmp/healthz_new.json 2>/dev/null || true
+  exit 1
+fi
 
-echo "Fetching health payload (if reachable):"
-curl -sS --max-time 10 "$URL" || true
+echo "Cleaning up workspace: Keep current/previous images; Removing older 'testing-*' tags"
+KEEP_IDS=$(sudo docker images "$IMAGE_BASE" --format '{{.Tag}} {{.ID}}' \
+  | awk '$1=="testing-current" || $1=="testing-previous" {print $2}' \
+  | sort -u)
 
-exit 1
+sudo docker images "$IMAGE_BASE" --format '{{.Tag}}' \
+  | grep '^testing-' \
+  | while read -r TAG; do
+    [ "$TAG" = "testing-current" ] && continue
+    [ "$TAG" = "testing-previous" ] && continue
+    [ "$TAG" = "$IMAGE_TAG" ] && continue
+
+    REF="${IMAGE_BASE}:${TAG}"
+    ID=$(sudo docker image inspect "$REF" --format '{{.Id}}' 2>/dev/null || true)
+
+    if [ -n "$ID" ] && echo "$KEEP_IDS" | grep -q "$ID"; then
+      continue
+    fi
+
+    echo "Removing $REF"
+    docker rmi -f "$REF" || true
+    done
+
+# Delete caches and system data for content older than 168h (~7 days)
+sudo docker builder prune -af --filter "until=168h" || true
+sudo docker system prune -af --filter "until=168h" || true
