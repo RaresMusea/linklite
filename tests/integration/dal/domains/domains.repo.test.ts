@@ -35,9 +35,7 @@ describe('Domain repo integration tests', () => {
     });
 
     beforeEach(async () => {
-        await prisma.domainEnrichmentJob.deleteMany();
-        await prisma.link.deleteMany();
-        await prisma.domain.deleteMany();
+        await resetDb();
         vi.clearAllMocks();
     });
 
