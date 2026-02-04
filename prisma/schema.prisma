@@ -29,6 +29,13 @@ enum DomainEnrichmentJobStatus {
   ERROR
 }
 
+enum LinkEnrichmentJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  ERROR
+}
+
 model Link {
   id        String   @id @default(cuid())
   slug      String   @unique
@@ -37,8 +44,15 @@ model Link {
   createdAt DateTime @default(now()) @map("created_at")
   ownerId   String?  @map("owner_id") // WILL BE USED LATER ON
 
-  domainId String? @map("domain_id")
-  domain   Domain? @relation(fields: [domainId], references: [id])
+  // Redirect / shortener enrichment (URL-level)
+  isShortener        Boolean?  @map("is_shortener")
+  redirectTargetUrl  String?   @map("redirect_target_url")
+  redirectStatusCode Int?      @map("redirect_status_code")
+  redirectCheckedAt  DateTime? @map("redirect_checked_at")
+
+  domainId          String?            @map("domain_id")
+  domain            Domain?            @relation(fields: [domainId], references: [id])
+  linkEnrichmentJob LinkEnrichmentJob?
 }
 
 model Domain {
@@ -86,6 +100,26 @@ model DomainEnrichmentJob {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   domain Domain @relation(fields: [domainId], references: [id])
+
+  @@index([lockedUntil])
+  @@index([status, runAfter])
+}
+
+model LinkEnrichmentJob {
+  id     String @id @default(cuid())
+  linkId String @unique @map("link_id")
+
+  status    LinkEnrichmentJobStatus @default(PENDING) @map("status")
+  runAfter  DateTime                @default(now()) @map("run_after")
+  attempts  Int                     @default(0)
+  lastError String?                 @map("last_error")
+
+  lockedUntil DateTime? @map("locked_until")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  link Link @relation(fields: [linkId], references: [id])
 
   @@index([lockedUntil])
   @@index([status, runAfter])
