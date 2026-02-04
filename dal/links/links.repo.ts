@@ -5,6 +5,7 @@ import { InvalidHostnameError } from '@/lib/errors/InvalidHostnameError';
 import { upsertDomain } from '@/dal/domains/domains.repo';
 import { upsertDomainEnrichmentJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
 import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
+import { upsertLinkEnrichmentJob } from '@/dal/link_enrichment_jobs/link_enrichment_job.repo';
 
 export async function createLink(input: CreateLinkInput): Promise<CreatedLink> {
     const hostname = normalizeHostnameFromUrl(input.targetUrl);
@@ -37,6 +38,8 @@ export async function createLink(input: CreateLinkInput): Promise<CreatedLink> {
         domainId: createdLink.domainId!,
         status: DomainEnrichmentJobStatus.PENDING,
     });
+
+    await upsertLinkEnrichmentJob(createdLink.id);
 
     return createdLink;
 }
