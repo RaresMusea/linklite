@@ -16,6 +16,7 @@ import { WhoisStatus } from '@/lib/whois/whois.types';
 import { Domain } from '@/generated/prisma/client';
 import { resetDb } from '@/tests/helpers/db';
 
+
 const mockedUtils = vi.hoisted(() => ({
     normalizeHostnameFromUrl: vi.fn(),
 }));
