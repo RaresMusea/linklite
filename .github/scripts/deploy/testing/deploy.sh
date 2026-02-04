@@ -144,7 +144,7 @@ for i in {1..30}; do
      SMOKE_OK="1"
      break
    fi
-  echo "Health reachable but commit not changed yet (old=$OLD_COMMIT new=${NEW_COMMIT:-<missing>})"
+  echo "Health reachable but commit SHA not changed yet (old=$OLD_COMMIT new=${NEW_COMMIT:-<missing>})"
   fi
   sleep 2
 done
@@ -156,3 +156,30 @@ if [ "$SMOKE_OK" != "1" ]; then
   cat /tmp/healthz_new.json 2>/dev/null || true
   exit 1
 fi
+
+echo "Cleaning up workspace: Keep current/previous images; Removing older 'testing-*' tags"
+KEEP_IDS=$(sudo docker images "$IMAGE_BASE" --format '{{.Tag}} {{.ID}}' \
+  | awk '$1=="testing-current" || $1=="testing-previous" {print $2}' \
+  | sort -u)
+
+sudo docker images "$IMAGE_BASE" --format '{{.Tag}}' \
+  | grep '^testing-' \
+  | while read -r TAG; do
+    [ "$TAG" = "testing-current" ] && continue
+    [ "$TAG" = "testing-previous" ] && continue
+    [ "$TAG" = "$IMAGE_TAG" ] && continue
+
+    REF="${IMAGE_BASE}:${TAG}"
+    ID=$(sudo docker image inspect "$REF" --format '{{.Id}}' 2>/dev/null || true)
+
+    if [ -n "$ID" ] && echo "$KEEP_IDS" | grep -q "$ID"; then
+      continue
+    fi
+
+    echo "Removing $REF"
+    docker rmi -f "$REF" || true
+    done
+
+# Delete caches and system data for content older than 168h (~7 days)
+sudo docker builder prune -af --filter "until=168h" || true
+sudo docker system prune -af --filter "until=168h" || true
