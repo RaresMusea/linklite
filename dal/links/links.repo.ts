@@ -5,7 +5,8 @@ import { InvalidHostnameError } from '@/lib/errors/InvalidHostnameError';
 import { upsertDomain } from '@/dal/domains/domains.repo';
 import { upsertDomainEnrichmentJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
 import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
-import { upsertLinkEnrichmentJob } from '@/dal/link_enrichment_jobs/link_enrichment_job.repo';
+import { upsertLinkEnrichmentJob } from '@/dal/link_enrichment_jobs/link_enrichment_jobs.repo';
+import { RedirectProbeResult } from '@/lib/redirect_safety/redirect_safety_types';
 
 export async function createLink(input: CreateLinkInput): Promise<CreatedLink> {
     const hostname = normalizeHostnameFromUrl(input.targetUrl);
@@ -60,4 +61,32 @@ export async function increaseClickCount(slug: string): Promise<number> {
     });
 
     return result.clicks;
+}
+
+export async function applyRedirectProbeResult(
+    linkId: string,
+    result: RedirectProbeResult,
+    isShortener: boolean
+): Promise<void> {
+    if (result.kind === 'redirect') {
+        await prisma.link.update({
+            where: { id: linkId },
+            data: {
+                isShortener,
+                redirectTargetUrl: result.targetUrl,
+                redirectStatusCode: result.statusCode,
+                redirectCheckedAt: new Date(),
+            },
+        });
+    } else {
+        await prisma.link.update({
+            where: { id: linkId },
+            data: {
+                isShortener: false,
+                redirectTargetUrl: null,
+                redirectStatusCode: null,
+                redirectCheckedAt: new Date(),
+            },
+        });
+    }
 }
