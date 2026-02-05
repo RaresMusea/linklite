@@ -1,6 +1,6 @@
 import { beforeEach, describe, it, expect, vi, Mock } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { createLink, increaseClickCount } from '@/dal/links/links.repo';
+import { applyRedirectProbeResult, createLink, increaseClickCount } from '@/dal/links/links.repo';
 import { normalizeHostnameFromUrl } from '@/lib/utils';
 import { upsertDomainEnrichmentJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
 import { upsertLinkEnrichmentJob } from '@/dal/link_enrichment_jobs/link_enrichment_jobs.repo';
@@ -603,7 +603,7 @@ describe('Link Repository - Integration Tests', () => {
             });
         });
 
-        describe('increaseClickCount', () => {
+    describe('increaseClickCount', () => {
             beforeEach(async () => {
                 vi.mocked(normalizeHostnameFromUrl).mockReturnValue('example.com');
             });
@@ -700,6 +700,73 @@ describe('Link Repository - Integration Tests', () => {
                 expect(updatedLink?.ownerId).toBe(ownerId);
                 expect(updatedLink?.clicks).toBe(2);
             });
+        });
+    });
+
+    describe('applyRedirectProbeResult', () => {
+        it('Should update redirect fields for redirect results', async () => {
+            // Arrange
+            (normalizeHostnameFromUrl as Mock).mockReturnValue('example.com');
+
+            const link = await createLink({
+                slug: 'redirect-test',
+                targetUrl: 'https://example.com',
+                ownerId: null,
+            });
+
+            const result = {
+                kind: 'redirect' as const,
+                statusCode: 301,
+                targetUrl: 'https://destination.com',
+                targetHost: 'destination.com',
+            };
+
+            // Act
+            await applyRedirectProbeResult(link.id, result, true);
+
+            // Assert
+            const updated = await prisma.link.findUnique({
+                where: { id: link.id },
+            });
+
+            expect(updated?.isShortener).toBe(true);
+            expect(updated?.redirectTargetUrl).toBe('https://destination.com');
+            expect(updated?.redirectStatusCode).toBe(301);
+            expect(updated?.redirectCheckedAt).toBeInstanceOf(Date);
+        });
+
+        it('Should clear redirect fields when no redirect is detected', async () => {
+            // Arrange
+            (normalizeHostnameFromUrl as Mock).mockReturnValue('example.com');
+
+            const link = await createLink({
+                slug: 'no-redirect-test',
+                targetUrl: 'https://example.com',
+                ownerId: null,
+            });
+
+            await prisma.link.update({
+                where: { id: link.id },
+                data: {
+                    isShortener: true,
+                    redirectTargetUrl: 'https://old.example.com',
+                    redirectStatusCode: 302,
+                    redirectCheckedAt: new Date('2024-01-01T10:00:00Z'),
+                },
+            });
+
+            // Act
+            await applyRedirectProbeResult(link.id, { kind: 'no-redirect' }, false);
+
+            // Assert
+            const updated = await prisma.link.findUnique({
+                where: { id: link.id },
+            });
+
+            expect(updated?.isShortener).toBe(false);
+            expect(updated?.redirectTargetUrl).toBeNull();
+            expect(updated?.redirectStatusCode).toBeNull();
+            expect(updated?.redirectCheckedAt).toBeInstanceOf(Date);
         });
     });
 });
