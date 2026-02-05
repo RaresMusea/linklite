@@ -88,4 +88,11 @@ describe('Probe redirect', () => {
 
         expect(result).toEqual({ kind: 'no-redirect' });
     });
+
+    it('Should return no-redirect for invalid URLs without calling fetch', async () => {
+        const result = await probeRedirect('not-a-url');
+
+        expect(result).toEqual({ kind: 'no-redirect' });
+        expect(fetch).not.toHaveBeenCalled();
+    });
 });

@@ -70,4 +70,10 @@ describe('Probe redirect - Integration', () => {
 
         expect(result).toEqual({ kind: 'no-redirect' });
     });
+
+    it('Should return no-redirect for invalid URLs', async () => {
+        const result = await probeRedirect('not-a-url');
+
+        expect(result).toEqual({ kind: 'no-redirect' });
+    });
 });

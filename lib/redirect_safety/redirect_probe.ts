@@ -11,11 +11,19 @@ export function isPrivateHost(hostname: string): boolean {
 }
 
 export async function probeRedirect(url: string): Promise<RedirectProbeResult> {
+    let parsed: URL;
+
+    try {
+        parsed = new URL(url);
+    } catch {
+        return { kind: 'no-redirect' };
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
 
     try {
-        const res = await fetch(url, {
+        const res = await fetch(parsed.toString(), {
             method: 'HEAD',
             redirect: 'manual',
             signal: controller.signal,
@@ -23,7 +31,7 @@ export async function probeRedirect(url: string): Promise<RedirectProbeResult> {
 
         if (res.status >= 300 && res.status < 400 && res.headers.has('location')) {
             const location = res.headers.get('location')!;
-            const target = new URL(location, url);
+            const target = new URL(location, parsed);
 
             return {
                 kind: 'redirect',
