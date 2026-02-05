@@ -13,16 +13,13 @@ import { logger } from '@/lib/logging/logger';
 import { ClaimedDomainJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.types';
 import { DomainEnrichmentJobResult } from '@/worker/domain_enrichment_worker_types';
 import { sleep } from '@/lib/timeouts';
+import { msSince } from '@/lib/time';
 
 const IDLE_SLEEP_MS = 1000;
 const workerLog = logger.component('worker.domain_enrichment').child(undefined, ['worker', 'domain-enrichment']);
 
 function minDate(a: Date, b: Date): Date {
     return a.getTime() <= b.getTime() ? a : b;
-}
-
-function msSince(startMs: number): number {
-    return Date.now() - startMs;
 }
 
 function normalizeError(error: unknown): Error {
