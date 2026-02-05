@@ -12,7 +12,6 @@ export function isPrivateHost(hostname: string): boolean {
 
 export async function probeRedirect(url: string): Promise<RedirectProbeResult> {
     let parsed: URL;
-
     try {
         parsed = new URL(url);
     } catch {
@@ -23,23 +22,38 @@ export async function probeRedirect(url: string): Promise<RedirectProbeResult> {
     const timeout = setTimeout(() => controller.abort(), 3000);
 
     try {
-        const res = await fetch(parsed.toString(), {
-            method: 'HEAD',
-            redirect: 'manual',
-            signal: controller.signal,
-        });
+        const tryOnce = async (method: 'HEAD' | 'GET') => {
+            const res = await fetch(parsed.toString(), {
+                method,
+                redirect: 'manual',
+                signal: controller.signal,
+                headers: {
+                    // helps with some CDNs
+                    'user-agent': 'linklite-enrichment-worker/1.0',
+                    accept: '*/*',
+                },
+            });
 
-        if (res.status >= 300 && res.status < 400 && res.headers.has('location')) {
-            const location = res.headers.get('location')!;
-            const target = new URL(location, parsed);
+            if (res.status >= 300 && res.status < 400 && res.headers.has('location')) {
+                const location = res.headers.get('location')!;
+                const target = new URL(location, parsed);
 
-            return {
-                kind: 'redirect',
-                statusCode: res.status,
-                targetUrl: target.toString(),
-                targetHost: target.hostname,
-            };
-        }
+                return {
+                    kind: 'redirect' as const,
+                    statusCode: res.status,
+                    targetUrl: target.toString(),
+                    targetHost: target.hostname,
+                };
+            }
+
+            return null;
+        };
+
+        const head = await tryOnce('HEAD');
+        if (head) return head;
+
+        const get = await tryOnce('GET');
+        if (get) return get;
 
         return { kind: 'no-redirect' };
     } finally {

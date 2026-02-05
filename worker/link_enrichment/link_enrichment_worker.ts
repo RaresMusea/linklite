@@ -13,7 +13,7 @@ import { applyRedirectProbeResult } from '@/dal/links/links.repo';
 import { msSince } from '@/lib/time';
 import { normalizeError } from '@/lib/errors/utils';
 import { prisma } from '@/lib/prisma';
-import { LinkEnrichmentJobResult } from '@/worker/link_enrcihment/link_enrichment_worker.types';
+import { LinkEnrichmentJobResult } from '@/worker/link_enrichment/link_enrichment_worker.types';
 
 const workerLog = logger.component('worker.link_enrichment').child(undefined, ['worker', 'link-enrichment']);
 const IDLE_SLEEP_MS = 1500; // 1.5s

@@ -16,7 +16,7 @@ import { sleep } from '@/lib/timeouts';
 import { msSince } from '@/lib/time';
 import { normalizeError } from '@/lib/errors/utils';
 
-const IDLE_SLEEP_MS = 1000;
+const IDLE_SLEEP_MS = 2500;
 const workerLog = logger.component('worker.domain_enrichment').child(undefined, ['worker', 'domain-enrichment']);
 
 function minDate(a: Date, b: Date): Date {

@@ -64,29 +64,47 @@ describe('Probe redirect', () => {
             method: 'HEAD',
             redirect: 'manual',
             signal: expect.any(AbortSignal),
+            headers: {
+                'user-agent': 'linklite-enrichment-worker/1.0',
+                accept: '*/*',
+            },
         });
     });
 
     it('Should return no-redirect for non-3xx responses', async () => {
-        vi.mocked(fetch).mockResolvedValueOnce({
-            status: 200,
-            headers: new Headers(),
-        } as Response);
+        vi.mocked(fetch)
+            .mockResolvedValueOnce({
+                status: 200,
+                headers: new Headers(),
+            } as Response)
+            .mockResolvedValueOnce({
+                status: 200,
+                headers: new Headers(),
+            } as Response);
 
         const result = await probeRedirect('https://example.com');
 
         expect(result).toEqual({ kind: 'no-redirect' });
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(vi.mocked(fetch).mock.calls[0]?.[1]?.method).toBe('HEAD');
+        expect(vi.mocked(fetch).mock.calls[1]?.[1]?.method).toBe('GET');
     });
 
     it('Should return no-redirect when location header is missing', async () => {
-        vi.mocked(fetch).mockResolvedValueOnce({
-            status: 302,
-            headers: new Headers(),
-        } as Response);
+        vi.mocked(fetch)
+            .mockResolvedValueOnce({
+                status: 302,
+                headers: new Headers(),
+            } as Response)
+            .mockResolvedValueOnce({
+                status: 302,
+                headers: new Headers(),
+            } as Response);
 
         const result = await probeRedirect('https://example.com');
 
         expect(result).toEqual({ kind: 'no-redirect' });
+        expect(fetch).toHaveBeenCalledTimes(2);
     });
 
     it('Should return no-redirect for invalid URLs without calling fetch', async () => {
