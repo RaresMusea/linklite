@@ -14,22 +14,13 @@ import { ClaimedDomainJob } from '@/dal/domain_enrichment_jobs/domain_enrichment
 import { DomainEnrichmentJobResult } from '@/worker/domain_enrichment_worker_types';
 import { sleep } from '@/lib/timeouts';
 import { msSince } from '@/lib/time';
+import { normalizeError } from '@/lib/errors/utils';
 
 const IDLE_SLEEP_MS = 1000;
 const workerLog = logger.component('worker.domain_enrichment').child(undefined, ['worker', 'domain-enrichment']);
 
 function minDate(a: Date, b: Date): Date {
     return a.getTime() <= b.getTime() ? a : b;
-}
-
-function normalizeError(error: unknown): Error {
-    if (error instanceof Error) return error;
-    if (typeof error === 'string') return new Error(error);
-    try {
-        return new Error(JSON.stringify(error));
-    } catch {
-        return new Error('Unknown error');
-    }
 }
 
 function jobLogger(base: typeof workerLog, job: ClaimedDomainJob) {
