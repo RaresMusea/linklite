@@ -1,7 +1,11 @@
 import { beforeEach, describe, it, expect, vi, afterEach } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { LinkEnrichmentJobStatus } from '@/generated/prisma/enums';
-import { claimNextLinkEnrichmentJob, upsertLinkEnrichmentJob } from '@/dal/link_enrichment_jobs/link_enrichment_jobs.repo';
+import {
+    claimNextLinkEnrichmentJob,
+    markLinkEnrichmentJobAsDone,
+    upsertLinkEnrichmentJob,
+} from '@/dal/link_enrichment_jobs/link_enrichment_jobs.repo';
 import { resetDb } from '@/tests/helpers/db';
 
 let testLinkId: string;
@@ -207,6 +211,34 @@ describe('Link Enrichment Jobs Repository Integration Tests', () => {
 
             // Assert
             expect(claimed?.linkId).toBe(testLinkId);
+        });
+    });
+
+    describe('Mark Link Enrichment Job As Done', () => {
+        it('Should mark the job as DONE and clear lock and error', async () => {
+            // Arrange
+            const job = await prisma.linkEnrichmentJob.create({
+                data: {
+                    linkId: testLinkId,
+                    status: LinkEnrichmentJobStatus.RUNNING,
+                    lockedUntil: new Date('2024-01-01T10:10:00Z'),
+                    lastError: 'previous error',
+                    attempts: 2,
+                },
+            });
+
+            // Act
+            await markLinkEnrichmentJobAsDone(job.id);
+
+            // Assert
+            const updatedJob = await prisma.linkEnrichmentJob.findUnique({
+                where: { id: job.id },
+            });
+
+            expect(updatedJob?.status).toBe(LinkEnrichmentJobStatus.DONE);
+            expect(updatedJob?.lockedUntil).toBeNull();
+            expect(updatedJob?.lastError).toBeNull();
+            expect(updatedJob?.attempts).toBe(2);
         });
     });
 });

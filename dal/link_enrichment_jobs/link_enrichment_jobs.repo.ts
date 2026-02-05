@@ -76,3 +76,14 @@ export async function claimNextLinkEnrichmentJob(): Promise<ClaimedLinkJob | nul
         attempts: candidate.attempts + 1,
     };
 }
+
+export async function markLinkEnrichmentJobAsDone(jobId: string) {
+    await prisma.linkEnrichmentJob.update({
+        where: { id: jobId },
+        data: {
+            status: LinkEnrichmentJobStatus.DONE,
+            lockedUntil: null,
+            lastError: null,
+        },
+    });
+}
