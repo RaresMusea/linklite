@@ -4,3 +4,10 @@ export type ClaimedLinkJob = {
     targetUrl: string;
     attempts: number;
 };
+
+export type RequeueLinkEnrichmentJobInput = {
+    jobId: string;
+    attempts: number;
+    error: unknown;
+    runAfter?: Date;
+};

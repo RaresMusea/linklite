@@ -4,6 +4,7 @@ import { LinkEnrichmentJobStatus } from '@/generated/prisma/enums';
 import {
     claimNextLinkEnrichmentJob,
     markLinkEnrichmentJobAsDone,
+    requeueLinkEnrichmentJob,
     upsertLinkEnrichmentJob,
 } from '@/dal/link_enrichment_jobs/link_enrichment_jobs.repo';
 import { resetDb } from '@/tests/helpers/db';
@@ -239,6 +240,101 @@ describe('Link Enrichment Jobs Repository Integration Tests', () => {
             expect(updatedJob?.lockedUntil).toBeNull();
             expect(updatedJob?.lastError).toBeNull();
             expect(updatedJob?.attempts).toBe(2);
+        });
+    });
+
+    describe('Requeue Link Enrichment Job', () => {
+        it('Should set status to PENDING, clear lock, and persist error string', async () => {
+            // Arrange
+            const job = await prisma.linkEnrichmentJob.create({
+                data: {
+                    linkId: testLinkId,
+                    status: LinkEnrichmentJobStatus.RUNNING,
+                    lockedUntil: new Date('2024-01-01T10:10:00Z'),
+                    lastError: null,
+                    attempts: 2,
+                },
+            });
+
+            const runAfter = new Date('2024-01-02T10:00:00Z');
+
+            // Act
+            await requeueLinkEnrichmentJob({
+                jobId: job.id,
+                attempts: 2,
+                error: 'boom',
+                runAfter,
+            });
+
+            // Assert
+            const updatedJob = await prisma.linkEnrichmentJob.findUnique({
+                where: { id: job.id },
+            });
+
+            expect(updatedJob?.status).toBe(LinkEnrichmentJobStatus.PENDING);
+            expect(updatedJob?.lockedUntil).toBeNull();
+            expect(updatedJob?.lastError).toBe('boom');
+            expect(updatedJob?.runAfter?.getTime()).toBe(runAfter.getTime());
+        });
+
+        it('Should compute runAfter using exponential backoff when not provided', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
+
+            const job = await prisma.linkEnrichmentJob.create({
+                data: {
+                    linkId: testLinkId,
+                    status: LinkEnrichmentJobStatus.RUNNING,
+                    lockedUntil: new Date('2024-01-01T10:10:00Z'),
+                    attempts: 2,
+                },
+            });
+
+            // Act
+            await requeueLinkEnrichmentJob({
+                jobId: job.id,
+                attempts: 2,
+                error: new Error('timeout'),
+            });
+
+            // Assert
+            const updatedJob = await prisma.linkEnrichmentJob.findUnique({
+                where: { id: job.id },
+            });
+
+            const expectedRunAfter = new Date(now.getTime() + 4 * 60_000);
+            expect(updatedJob?.runAfter?.getTime()).toBe(expectedRunAfter.getTime());
+            expect(updatedJob?.lastError).toBe('timeout');
+            expect(updatedJob?.lockedUntil).toBeNull();
+            expect(updatedJob?.status).toBe(LinkEnrichmentJobStatus.PENDING);
+        });
+
+        it('Should stringify non-error values when setting lastError', async () => {
+            // Arrange
+            const job = await prisma.linkEnrichmentJob.create({
+                data: {
+                    linkId: testLinkId,
+                    status: LinkEnrichmentJobStatus.RUNNING,
+                    attempts: 1,
+                },
+            });
+
+            // Act
+            await requeueLinkEnrichmentJob({
+                jobId: job.id,
+                attempts: 1,
+                error: 404,
+                runAfter: new Date('2024-01-02T10:00:00Z'),
+            });
+
+            // Assert
+            const updatedJob = await prisma.linkEnrichmentJob.findUnique({
+                where: { id: job.id },
+            });
+
+            expect(updatedJob?.lastError).toBe('404');
         });
     });
 });

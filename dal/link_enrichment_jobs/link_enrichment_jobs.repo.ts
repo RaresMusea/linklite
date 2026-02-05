@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
-import { ClaimedLinkJob } from '@/dal/link_enrichment_jobs/link_enrichment_jobs.types';
+import { ClaimedLinkJob, RequeueLinkEnrichmentJobInput } from '@/dal/link_enrichment_jobs/link_enrichment_jobs.types';
 import { LinkEnrichmentJobStatus } from '@/generated/prisma/enums';
+import { computeBackoffMinutes } from '@/lib/exponential_backoff';
 
 const LEASE_MS = 30_000; // 30 seconds
 const STALE_GRACE_MS = 15_000; // 15 seonds
@@ -84,6 +85,21 @@ export async function markLinkEnrichmentJobAsDone(jobId: string) {
             status: LinkEnrichmentJobStatus.DONE,
             lockedUntil: null,
             lastError: null,
+        },
+    });
+}
+
+export async function requeueLinkEnrichmentJob(input: RequeueLinkEnrichmentJobInput): Promise<void> {
+    const backoffMinutes = computeBackoffMinutes(input.attempts);
+    const nextRun = input.runAfter ?? new Date(Date.now() + backoffMinutes * 60_000);
+
+    await prisma.linkEnrichmentJob.update({
+        where: { id: input.jobId },
+        data: {
+            status: LinkEnrichmentJobStatus.PENDING,
+            runAfter: nextRun,
+            lockedUntil: null,
+            lastError: input.error instanceof Error ? input.error.message : String(input.error),
         },
     });
 }
