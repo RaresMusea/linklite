@@ -13,6 +13,7 @@ import { applyRedirectProbeResult } from '@/dal/links/links.repo';
 import { msSince } from '@/lib/time';
 import { normalizeError } from '@/lib/errors/utils';
 import { prisma } from '@/lib/prisma';
+import { LinkEnrichmentJobResult } from '@/worker/link_enrcihment/link_enrichment_worker.types';
 
 const workerLog = logger.component('worker.link_enrichment').child(undefined, ['worker', 'link-enrichment']);
 const IDLE_SLEEP_MS = 1500; // 1.5s
@@ -66,7 +67,7 @@ async function main(): Promise<void> {
             await markLinkEnrichmentJobAsDone(job.id);
 
             jobLog.info('Job finished', {
-                result: 'DONE',
+                result: 'DONE' satisfies LinkEnrichmentJobResult,
                 durationMs: msSince(startedAtMs),
                 kind: probeResult.kind,
                 isShortener,
@@ -75,7 +76,7 @@ async function main(): Promise<void> {
             const normalizedError = normalizeError(error);
 
             jobLog.error('Job failed', {
-                result: 'FAILED',
+                result: 'FAILED' satisfies LinkEnrichmentJobResult,
                 durationMs: msSince(startedAtMs),
                 error: normalizedError,
             });
