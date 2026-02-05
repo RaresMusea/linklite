@@ -1,4 +1,4 @@
-import { TRUSTED_DOMAINS } from '@/lib/trusted_domains';
+import { TRUSTED_DOMAINS } from '@/lib/redirect_safety/trusted_domains';
 
 export function isAllowlisted(url: string): boolean {
     try {
