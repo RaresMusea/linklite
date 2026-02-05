@@ -6,10 +6,10 @@ import {
 import { prisma } from '@/lib/prisma';
 import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
 import { DomainEnrichmentJob } from '@/generated/prisma/client';
+import { computeBackoffMinutes } from '@/lib/exponential_backoff';
 
 const LEASE_MS = 2 * 60_000; // 2 minutes
 const STALE_GRACE_MS = 0;
-const MAX_BACKOFF_MIN = 60;
 
 export async function upsertDomainEnrichmentJob(input: UpsertDomainEnrichmentJobInput): Promise<void> {
     await prisma.domainEnrichmentJob.upsert({
@@ -113,10 +113,4 @@ export async function getDomainEnrichmentJobById(id: string): Promise<DomainEnri
             domain: false,
         },
     });
-}
-
-function computeBackoffMinutes(attempts: number): number {
-    const exp = Math.min(attempts, 10);
-
-    return Math.min(MAX_BACKOFF_MIN, Math.max(1, 2 ** exp));
 }

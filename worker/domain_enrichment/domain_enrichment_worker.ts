@@ -11,31 +11,16 @@ import {
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logging/logger';
 import { ClaimedDomainJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.types';
-import { DomainEnrichmentJobResult } from '@/worker/domain_enrichment_worker_types';
+import { DomainEnrichmentJobResult } from '@/worker/domain_enrichment/domain_enrichment_worker_types';
+import { sleep } from '@/lib/timeouts';
+import { msSince } from '@/lib/time';
+import { normalizeError } from '@/lib/errors/utils';
 
-const IDLE_SLEEP_MS = 1000;
+const IDLE_SLEEP_MS = 2500;
 const workerLog = logger.component('worker.domain_enrichment').child(undefined, ['worker', 'domain-enrichment']);
-
-function sleep(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function minDate(a: Date, b: Date): Date {
     return a.getTime() <= b.getTime() ? a : b;
-}
-
-function msSince(startMs: number): number {
-    return Date.now() - startMs;
-}
-
-function normalizeError(error: unknown): Error {
-    if (error instanceof Error) return error;
-    if (typeof error === 'string') return new Error(error);
-    try {
-        return new Error(JSON.stringify(error));
-    } catch {
-        return new Error('Unknown error');
-    }
 }
 
 function jobLogger(base: typeof workerLog, job: ClaimedDomainJob) {

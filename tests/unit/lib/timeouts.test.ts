@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { withTimeout } from '@/lib/timeouts';
+import { sleep, withTimeout } from '@/lib/timeouts';
 
 describe('WithTimeout function tests', () => {
     beforeEach(() => {
@@ -118,5 +118,37 @@ describe('WithTimeout function tests', () => {
                 }
             }
         });
+    });
+});
+
+describe('Sleep function tests', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('Should resolve only after the specified duration', async () => {
+        const sleeper = sleep(100);
+
+        let resolved = false;
+        sleeper.then(() => {
+            resolved = true;
+        });
+
+        vi.advanceTimersByTime(99);
+        expect(resolved).toBe(false);
+
+        vi.advanceTimersByTime(1);
+        await expect(sleeper).resolves.toBeUndefined();
+        expect(resolved).toBe(true);
+    });
+
+    it('Should resolve immediately when duration is 0', async () => {
+        const sleeper = sleep(0);
+        vi.advanceTimersByTime(0);
+        await expect(sleeper).resolves.toBeUndefined();
     });
 });

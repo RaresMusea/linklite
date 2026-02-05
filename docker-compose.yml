@@ -47,16 +47,27 @@ services:
       sh -lc "pnpm prisma migrate deploy"
     restart: "no"
 
-  worker:
+  domain-enrichment-worker:
     build: *app_build
-    container_name: linklite-worker
+    container_name: linklite-domain-enrichment-worker
     restart: unless-stopped
     env_file: *common_env
     depends_on:
       migrate:
         condition: service_completed_successfully
     command: >
-      sh -lc "pnpm start:worker"
+      sh -lc "pnpm start:domain-enrichment-worker"
+
+  link-enrichment-worker:
+    build: *app_build
+    container_name: linklite-link-enrichment-worker
+    restart: unless-stopped
+    env_file: *common_env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: >
+      sh -lc "pnpm start:link-enrichment-worker"
 
 volumes:
   pgdata:

@@ -1,8 +1,9 @@
 import { beforeEach, describe, it, expect, vi, Mock } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { createLink, increaseClickCount } from '@/dal/links/links.repo';
+import { applyRedirectProbeResult, createLink, increaseClickCount } from '@/dal/links/links.repo';
 import { normalizeHostnameFromUrl } from '@/lib/utils';
 import { upsertDomainEnrichmentJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
+import { upsertLinkEnrichmentJob } from '@/dal/link_enrichment_jobs/link_enrichment_jobs.repo';
 import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
 import { InvalidHostnameError } from '@/lib/errors/InvalidHostnameError';
 import { resetDb } from '@/tests/helpers/db';
@@ -13,6 +14,10 @@ vi.mock('@/lib/utils', () => ({
 
 vi.mock('@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo', () => ({
     upsertDomainEnrichmentJob: vi.fn(),
+}));
+
+vi.mock('@/dal/link_enrichment_jobs/link_enrichment_jobs.repo', () => ({
+    upsertLinkEnrichmentJob: vi.fn(),
 }));
 
 beforeEach(async () => {
@@ -64,6 +69,8 @@ describe('Link Repository - Integration Tests', () => {
                     domainId: result.domainId,
                     status: DomainEnrichmentJobStatus.PENDING,
                 });
+                expect(upsertLinkEnrichmentJob).toHaveBeenCalledTimes(1);
+                expect(upsertLinkEnrichmentJob).toHaveBeenCalledWith(result.id);
             });
 
             it('Should create a link with ownerId', async () => {
@@ -81,6 +88,7 @@ describe('Link Repository - Integration Tests', () => {
                 // Assert
                 expect(result.ownerId).toBe(ownerId);
                 expect(upsertDomainEnrichmentJob).toHaveBeenCalled();
+                expect(upsertLinkEnrichmentJob).toHaveBeenCalledWith(result.id);
             });
 
             it('Should reuse existing domain and create enrichment job for each link', async () => {
@@ -119,6 +127,9 @@ describe('Link Repository - Integration Tests', () => {
                     domainId: secondLink.domainId,
                     status: DomainEnrichmentJobStatus.PENDING,
                 });
+                expect(upsertLinkEnrichmentJob).toHaveBeenCalledTimes(2);
+                expect(upsertLinkEnrichmentJob).toHaveBeenNthCalledWith(1, firstLink.id);
+                expect(upsertLinkEnrichmentJob).toHaveBeenNthCalledWith(2, secondLink.id);
             });
 
             it('Should create separate domains for different hostnames', async () => {
@@ -144,6 +155,7 @@ describe('Link Repository - Integration Tests', () => {
                 expect(domains.map((d) => d.hostname)).toEqual(expect.arrayContaining(['example.com', 'google.com']));
 
                 expect(upsertDomainEnrichmentJob).toHaveBeenCalledTimes(2);
+                expect(upsertLinkEnrichmentJob).toHaveBeenCalledTimes(2);
             });
         });
 
@@ -198,6 +210,7 @@ describe('Link Repository - Integration Tests', () => {
                 // Assert
                 expect(result.targetUrl).toBe(targetUrl);
                 expect(upsertDomainEnrichmentJob).toHaveBeenCalled();
+                expect(upsertLinkEnrichmentJob).toHaveBeenCalledWith(result.id);
             });
 
             it('Should handle URLs with ports and credentials', async () => {
@@ -260,6 +273,7 @@ describe('Link Repository - Integration Tests', () => {
 
                 // Verify enrichment job not called
                 expect(upsertDomainEnrichmentJob).not.toHaveBeenCalled();
+                expect(upsertLinkEnrichmentJob).not.toHaveBeenCalled();
             });
 
             it('Should throw InvalidHostnameError when URL normalization returns empty string', async () => {
@@ -288,6 +302,7 @@ describe('Link Repository - Integration Tests', () => {
 
                 // Clear mock to track only second call
                 vi.mocked(upsertDomainEnrichmentJob).mockClear();
+                vi.mocked(upsertLinkEnrichmentJob).mockClear();
 
                 // Act & Assert - Second attempt with same slug
                 await expect(
@@ -300,6 +315,7 @@ describe('Link Repository - Integration Tests', () => {
 
                 // Verify enrichment job not called for failed attempt
                 expect(upsertDomainEnrichmentJob).not.toHaveBeenCalled();
+                expect(upsertLinkEnrichmentJob).not.toHaveBeenCalled();
 
                 // Verify only one link exists
                 const links = await prisma.link.findMany();
@@ -320,6 +336,7 @@ describe('Link Repository - Integration Tests', () => {
 
                 // Clear mock to track only the second call
                 vi.mocked(upsertDomainEnrichmentJob).mockClear();
+                vi.mocked(upsertLinkEnrichmentJob).mockClear();
 
                 // Count existing records
                 const initialLinkCount = await prisma.link.count();
@@ -338,6 +355,7 @@ describe('Link Repository - Integration Tests', () => {
 
                 // Assert - Verify enrichment job was NOT called for the failed attempt
                 expect(upsertDomainEnrichmentJob).not.toHaveBeenCalled();
+                expect(upsertLinkEnrichmentJob).not.toHaveBeenCalled();
 
                 // Assert - Verify database state didn't change
                 const finalLinkCount = await prisma.link.count();
@@ -383,6 +401,7 @@ describe('Link Repository - Integration Tests', () => {
 
                 // Verify enrichment job not called
                 expect(upsertDomainEnrichmentJob).not.toHaveBeenCalled();
+                expect(upsertLinkEnrichmentJob).not.toHaveBeenCalled();
             });
 
             it('Should not create enrichment job for invalid URLs', async () => {
@@ -399,6 +418,7 @@ describe('Link Repository - Integration Tests', () => {
                     // Reset mocks for each scenario
                     vi.mocked(normalizeHostnameFromUrl).mockReturnValue(null);
                     vi.mocked(upsertDomainEnrichmentJob).mockClear();
+                    vi.mocked(upsertLinkEnrichmentJob).mockClear();
 
                     // Count before
                     const linksBefore = await prisma.link.count();
@@ -422,6 +442,7 @@ describe('Link Repository - Integration Tests', () => {
 
                     // Verify enrichment job not called
                     expect(upsertDomainEnrichmentJob).not.toHaveBeenCalled();
+                    expect(upsertLinkEnrichmentJob).not.toHaveBeenCalled();
                 }
             });
 
@@ -442,6 +463,7 @@ describe('Link Repository - Integration Tests', () => {
 
                 // Clear mock to track second attempt
                 vi.mocked(upsertDomainEnrichmentJob).mockClear();
+                vi.mocked(upsertLinkEnrichmentJob).mockClear();
 
                 // Count before second attempt
                 const jobsBefore = await prisma.domainEnrichmentJob.count();
@@ -461,6 +483,7 @@ describe('Link Repository - Integration Tests', () => {
 
                 // Verify mock wasn't called
                 expect(upsertDomainEnrichmentJob).not.toHaveBeenCalled();
+                expect(upsertLinkEnrichmentJob).not.toHaveBeenCalled();
             });
 
             describe('Concurrency and race conditions', () => {
@@ -496,6 +519,7 @@ describe('Link Repository - Integration Tests', () => {
 
                     // Should have triggered 3 enrichment jobs
                     expect(upsertDomainEnrichmentJob).toHaveBeenCalledTimes(3);
+                    expect(upsertLinkEnrichmentJob).toHaveBeenCalledTimes(3);
                 });
             });
 
@@ -579,7 +603,7 @@ describe('Link Repository - Integration Tests', () => {
             });
         });
 
-        describe('increaseClickCount', () => {
+    describe('increaseClickCount', () => {
             beforeEach(async () => {
                 vi.mocked(normalizeHostnameFromUrl).mockReturnValue('example.com');
             });
@@ -676,6 +700,73 @@ describe('Link Repository - Integration Tests', () => {
                 expect(updatedLink?.ownerId).toBe(ownerId);
                 expect(updatedLink?.clicks).toBe(2);
             });
+        });
+    });
+
+    describe('applyRedirectProbeResult', () => {
+        it('Should update redirect fields for redirect results', async () => {
+            // Arrange
+            (normalizeHostnameFromUrl as Mock).mockReturnValue('example.com');
+
+            const link = await createLink({
+                slug: 'redirect-test',
+                targetUrl: 'https://example.com',
+                ownerId: null,
+            });
+
+            const result = {
+                kind: 'redirect' as const,
+                statusCode: 301,
+                targetUrl: 'https://destination.com',
+                targetHost: 'destination.com',
+            };
+
+            // Act
+            await applyRedirectProbeResult(link.id, result, true);
+
+            // Assert
+            const updated = await prisma.link.findUnique({
+                where: { id: link.id },
+            });
+
+            expect(updated?.isShortener).toBe(true);
+            expect(updated?.redirectTargetUrl).toBe('https://destination.com');
+            expect(updated?.redirectStatusCode).toBe(301);
+            expect(updated?.redirectCheckedAt).toBeInstanceOf(Date);
+        });
+
+        it('Should clear redirect fields when no redirect is detected', async () => {
+            // Arrange
+            (normalizeHostnameFromUrl as Mock).mockReturnValue('example.com');
+
+            const link = await createLink({
+                slug: 'no-redirect-test',
+                targetUrl: 'https://example.com',
+                ownerId: null,
+            });
+
+            await prisma.link.update({
+                where: { id: link.id },
+                data: {
+                    isShortener: true,
+                    redirectTargetUrl: 'https://old.example.com',
+                    redirectStatusCode: 302,
+                    redirectCheckedAt: new Date('2024-01-01T10:00:00Z'),
+                },
+            });
+
+            // Act
+            await applyRedirectProbeResult(link.id, { kind: 'no-redirect' }, false);
+
+            // Assert
+            const updated = await prisma.link.findUnique({
+                where: { id: link.id },
+            });
+
+            expect(updated?.isShortener).toBe(false);
+            expect(updated?.redirectTargetUrl).toBeNull();
+            expect(updated?.redirectStatusCode).toBeNull();
+            expect(updated?.redirectCheckedAt).toBeInstanceOf(Date);
         });
     });
 });
