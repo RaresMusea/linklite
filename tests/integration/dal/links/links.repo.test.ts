@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { createLink, increaseClickCount } from '@/dal/links/links.repo';
 import { normalizeHostnameFromUrl } from '@/lib/utils';
 import { upsertDomainEnrichmentJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
-import { upsertLinkEnrichmentJob } from '@/dal/link_enrichment_jobs/link_enrichment_job.repo';
+import { upsertLinkEnrichmentJob } from '@/dal/link_enrichment_jobs/link_enrichment_jobs.repo';
 import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
 import { InvalidHostnameError } from '@/lib/errors/InvalidHostnameError';
 import { resetDb } from '@/tests/helpers/db';
@@ -16,7 +16,7 @@ vi.mock('@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo', () => ({
     upsertDomainEnrichmentJob: vi.fn(),
 }));
 
-vi.mock('@/dal/link_enrichment_jobs/link_enrichment_job.repo', () => ({
+vi.mock('@/dal/link_enrichment_jobs/link_enrichment_jobs.repo', () => ({
     upsertLinkEnrichmentJob: vi.fn(),
 }));
 
