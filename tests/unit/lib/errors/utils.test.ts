@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractErrorCode, extractErrorMessage } from '@/lib/errors/utils';
+import { extractErrorCode, extractErrorMessage, normalizeError } from '@/lib/errors/utils';
 
 describe('extractErrorMessage', () => {
     it('should return error message for Error instance', () => {
@@ -244,5 +244,35 @@ describe('combined usage examples', () => {
 
         expect(message).toBe('WHOIS failed');
         expect(code).toBe(500);
+    });
+});
+
+describe('normalizeError', () => {
+    it('should return the same Error instance', () => {
+        const error = new Error('boom');
+        const result = normalizeError(error);
+        expect(result).toBe(error);
+        expect(result.message).toBe('boom');
+    });
+
+    it('should wrap string values as Error', () => {
+        const result = normalizeError('oops');
+        expect(result).toBeInstanceOf(Error);
+        expect(result.message).toBe('oops');
+    });
+
+    it('should stringify non-error objects', () => {
+        const result = normalizeError({ reason: 'bad', code: 500 });
+        expect(result).toBeInstanceOf(Error);
+        expect(result.message).toBe(JSON.stringify({ reason: 'bad', code: 500 }));
+    });
+
+    it('should return Unknown error when object cannot be stringified', () => {
+        const circular: Record<string, unknown> = {};
+        circular.self = circular;
+
+        const result = normalizeError(circular);
+        expect(result).toBeInstanceOf(Error);
+        expect(result.message).toBe('Unknown error');
     });
 });
