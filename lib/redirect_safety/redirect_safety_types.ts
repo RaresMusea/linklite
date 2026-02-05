@@ -24,6 +24,15 @@ export type DomainAgeUnknownReason =
 export type DomainAgeResult = {
     age: DomainAge;
     reason?: DomainAgeUnknownReason;
-}
+};
 
-
+export type RedirectProbeResult =
+    | {
+          kind: 'no-redirect';
+      }
+    | {
+          kind: 'redirect';
+          statusCode: number;
+          targetUrl: string;
+          targetHost: string;
+      };
