@@ -7,4 +7,3 @@ data:
   APP_ENV: preprod
   LOG_LEVEL: INFO
   LOG_FORMAT: pretty
-  GHCR_USER: raresmusea
