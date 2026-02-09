@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linklite-config
+  namespace: linklite-preprod
+data:
+  APP_ENV: preprod
+  LOG_LEVEL: INFO
+  LOG_FORMAT: pretty
+  GHCR_USER: raresmusea
