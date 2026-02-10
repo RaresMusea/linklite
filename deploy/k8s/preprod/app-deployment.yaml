@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: ghcr.io/raresmusea/linklite:testing-sha
+          image: ghcr.io/raresmusea/linklite:testing-REPLACE-WITH-SHA
           imagePullPolicy: IfNotPresent
 
           ports:
