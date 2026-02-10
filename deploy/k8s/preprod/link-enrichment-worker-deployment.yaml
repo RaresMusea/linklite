@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linklite-link-enrichment-worker
+  namespace: linklite-preprod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: linklite
+      app.kubernetes.io/component: link-enrichment-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: linklite
+        app.kubernetes.io/component: link-enrichment-worker
+    spec:
+      containers:
+        - name: worker-domain
+          image: ghcr.io/raresmusea/linklite:testing-REPLACE-WITH-SHA
+          command: ["sh", "-lc", "pnpm start:link-enrichment-worker"]
+          envFrom:
+            - configMapRef:
+                name: linklite-config
+            - secretRef:
+                name: linklite-secrets
