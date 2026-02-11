@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linklite-domain-enrichment-worker
+  namespace: linklite-preprod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: linklite
+      app.kubernetes.io/component: domain-enrichment-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: linklite
+        app.kubernetes.io/component: domain-enrichment-worker
+    spec:
+      containers:
+        - name: domain-enrichment-worker
+          image: ghcr.io/raresmusea/linklite:testing-current
+          command: ["sh", "-lc", "pnpm start:domain-enrichment-worker"]
+          envFrom:
+            - configMapRef:
+                name: linklite-config
+            - secretRef:
+                name: linklite-secrets

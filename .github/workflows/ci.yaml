@@ -472,4 +472,4 @@ jobs:
         run: pnpm run build
 
       - name: Build domain enrichment worker
-        run: "pnpm run build:worker"
+        run: "pnpm run build:workers"
