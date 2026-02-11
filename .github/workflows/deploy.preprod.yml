@@ -1,0 +1,49 @@
+name: CD (Kubernetes pre-prod)
+
+on:
+  workflow_run:
+    workflows: [ "Publish (GHCR CI)" ]
+    types: [ completed ]
+
+concurrency:
+  group: deploy-preprod
+  cancel-in-progress: true
+
+env:
+  IMAGE_TAG: testing-${{ github.event.workflow_run.head_sha }}
+  HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+  REPO: ${{ github.repository }}
+
+jobs:
+  deploy:
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'testing'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-north-1
+
+      - name: Deploy to k3s cluster (SSM)
+        run: |
+          aws ssm send-command \
+            --region eu-north-1 \
+            --instance-ids "${{ secrets.AWS_PREPROD_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy LinkLite preprod ${HEAD_SHA}" \
+            --parameters commands="[
+              \"set -euo pipefail\",
+              \"export IMAGE_TAG=${IMAGE_TAG}\",
+              \"export HEAD_SHA=${HEAD_SHA}\",
+              \"export REPO=${REPO}\",
+              \"curl -fsSL https://raw.githubusercontent.com/${REPO}/${HEAD_SHA}/.github/scripts/deploy/preprod-k3s/bootstrap.sh -o /tmp/bootstrap.sh\",
+              \"chmod +x /tmp/bootstrap.sh\",
+              \"/tmp/bootstrap.sh\"
+            ]"
