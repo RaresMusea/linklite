@@ -32,6 +32,15 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-north-1
 
+      - name: Debug raw URL
+        run: |
+          set -euo pipefail
+          echo "HEAD_SHA=${HEAD_SHA}"
+          echo "REPO=${REPO}"
+          URL="https://raw.githubusercontent.com/${REPO}/${HEAD_SHA}/.github/scripts/deploy/preprod-k8s/bootstrap.sh"
+          echo "$URL"
+          curl -I "$URL"
+
       - name: Deploy to k3s cluster (SSM)
         run: |
           aws ssm send-command \
