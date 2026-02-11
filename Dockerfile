@@ -24,6 +24,9 @@ RUN pnpm prisma generate
 # Build Next.js
 RUN pnpm build
 
+# Build domain enrichment worker + link enrichmentworker (transpile TS to JS)
+RUN pnpm build:workers
+
 # ---- run (runtime) ----
 FROM node:20-bookworm-slim AS run
 WORKDIR /app
@@ -32,13 +35,14 @@ RUN corepack enable
 
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./prisma.config.ts
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next ./.next
+COPY --from=build /app/dist ./dist
+RUN node -e "require('fs').writeFileSync('dist/package.json', JSON.stringify({ type: 'module' }))"
 
 EXPOSE 3000
 CMD ["pnpm", "start"]

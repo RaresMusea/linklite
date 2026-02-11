@@ -20,20 +20,54 @@ services:
       retries: 20
 
   app:
-    build:
+    build: &app_build
       context: .
-    container_name: app
+      args:
+        DATABASE_URL: ${DATABASE_URL}
+    container_name: linklite-app
     restart: unless-stopped
-    env_file:
+    env_file: &common_env
       - .env.docker
     ports:
       - "3000:3000"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     command: >
       sh -lc "pnpm prisma migrate deploy &&
               pnpm start"
+
+  migrate:
+    build: *app_build
+    env_file: *common_env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -lc "pnpm prisma migrate deploy"
+    restart: "no"
+
+  domain-enrichment-worker:
+    build: *app_build
+    container_name: linklite-domain-enrichment-worker
+    restart: unless-stopped
+    env_file: *common_env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: >
+      sh -lc "pnpm start:domain-enrichment-worker"
+
+  link-enrichment-worker:
+    build: *app_build
+    container_name: linklite-link-enrichment-worker
+    restart: unless-stopped
+    env_file: *common_env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: >
+      sh -lc "pnpm start:link-enrichment-worker"
 
 volumes:
   pgdata:

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: linklite-preprod
+  labels:
+    app.kubernetes.io/name: linklite
+    app.kubernetes.io/part-of: linklite
+    app.kubernetes.io/environment: preprod
+    environment: preprod

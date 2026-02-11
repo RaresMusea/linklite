@@ -1,8 +1,16 @@
 name: CI
 
+permissions:
+  contents: read
+  pull-requests: read
+
+
 on:
   push:
-    branches: [ "develop", "testing", "main" ]
+    branches:
+      - develop
+      - testing
+      - main
     paths-ignore:
       - "**/*.md"
   pull_request:
@@ -17,7 +25,51 @@ concurrency:
 env:
   DATABASE_URL: ${{secrets.DATABASE_URL}}
 
+
 jobs:
+  should-run-on-push:
+    permissions:
+      contents: read
+      pull-requests: read
+    name: Detect open PR for branch
+    runs-on: ubuntu-latest
+    outputs:
+      has_pr: ${{ steps.pr.outputs.has_pr }}
+    steps:
+      - id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Only relevant on push
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "has_pr=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          echo "Checking open PRs for branch: $BRANCH"
+          
+          # main/testing don't need PR detection
+          if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "testing" ]; then
+            echo "has_pr=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Use Search API (more permissive than /pulls)
+          QUERY="repo:${{ github.repository }} is:pr is:open head:${{ github.repository_owner }}:$BRANCH"
+          
+          if command -v timeout >/dev/null 2>&1; then
+            PRS=$(timeout 8s gh api search/issues -f q="$QUERY" --jq '.total_count' 2>/dev/null || echo "0")
+          else
+            PRS=$(gh api search/issues -f q="$QUERY" --jq '.total_count' 2>/dev/null || echo "0")
+          fi
+          
+          if [ "$PRS" -gt 0 ]; then
+            echo "has_pr=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_pr=false" >> $GITHUB_OUTPUT
+          fi
+
   pre-requisites:
     name: Pre-requisites (setup & install)
     runs-on: ubuntu-latest
@@ -43,7 +95,19 @@ jobs:
 
   checks:
     name: Checks (lint & typecheck)
-    needs: pre-requisites
+    needs:
+      - pre-requisites
+      - should-run-on-push
+    if: |
+      github.event_name == 'pull_request' ||
+      (
+        github.event_name == 'push' &&
+        (
+          github.ref == 'refs/heads/main' ||
+          github.ref == 'refs/heads/testing' ||
+          needs.should-run-on-push.outputs.has_pr == 'false'
+        )
+      )
     runs-on: ubuntu-latest
 
     steps:
@@ -76,7 +140,23 @@ jobs:
 
   ui-tests:
     name: UI Tests
-    needs: checks
+    needs:
+      - checks
+      - should-run-on-push
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
+    if: |
+      github.event_name == 'pull_request' ||
+      (
+        github.event_name == 'push' &&
+        (
+          github.ref == 'refs/heads/main' ||
+          github.ref == 'refs/heads/testing' ||
+          needs.should-run-on-push.outputs.has_pr == 'false'
+        )
+      )
     runs-on: ubuntu-latest
 
     steps:
@@ -98,12 +178,61 @@ jobs:
       - name: Install dependencies (uses cache)
         run: pnpm install --frozen-lockfile
 
-      - name: UI tests
+      - name: Run UI tests
         run: pnpm test:ui
+
+      - name: Publish UI tests report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: UI Tests Report
+          path: reports/ui/junit.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Generate UI tests coverage summary
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const p = "coverage/ui/coverage-summary.json";
+          if (!fs.existsSync(p)) { console.log("No coverage summary found"); process.exit(0); }
+          const s = JSON.parse(fs.readFileSync(p, "utf8")).total;
+          
+          const md = [
+            "## UI tests coverage",
+            "",
+            "| Metric | Coverage (%) |",
+            "|---|---:|",
+            `| Lines | ${s.lines.pct}% |`,
+            `| Statements | ${s.statements.pct}% |`,
+            `| Functions | ${s.functions.pct}% |`,
+            `| Branches | ${s.branches.pct}% |`,
+            ""
+          ].join("\n");
+          
+          require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+          NODE
 
   unit-tests:
     name: Unit Tests
-    needs: checks
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
+    needs:
+      - checks
+      - should-run-on-push
+    if: |
+      github.event_name == 'pull_request' ||
+      (
+        github.event_name == 'push' &&
+        (
+          github.ref == 'refs/heads/main' ||
+          github.ref == 'refs/heads/testing' ||
+          needs.should-run-on-push.outputs.has_pr == 'false'
+        )
+      )
     runs-on: ubuntu-latest
 
     steps:
@@ -125,15 +254,102 @@ jobs:
       - name: Install dependencies (uses cache)
         run: pnpm install --frozen-lockfile
 
-      - name: Unit tests
+      - name: Generate Prisma Client
+        run: pnpm prisma generate
+
+      - name: Run unit tests
         run: pnpm test:unit
 
+      - name: Publish unit tests report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Unit Tests Report
+          path: reports/unit/junit.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Generate unit tests coverage summary
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const p = "coverage/unit/coverage-summary.json";
+          if (!fs.existsSync(p)) { console.log("No coverage summary found"); process.exit(0); }
+          const s = JSON.parse(fs.readFileSync(p, "utf8")).total;
+
+          const md = [
+            "## Unit tests coverage",
+            "",
+            "| Metric | Coverage (%) |",
+            "|---|---:|",
+            `| Lines | ${s.lines.pct}% |`,
+            `| Statements | ${s.statements.pct}% |`,
+            `| Functions | ${s.functions.pct}% |`,
+            `| Branches | ${s.branches.pct}% |`,
+            ""
+          ].join("\n");
+
+          require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+          NODE
+
+  integration-gate:
+    name: Decide whether the integration tests should run or not
+    runs-on: ubuntu-latest
+    needs:
+      - should-run-on-push
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Default: don't run
+          RUN="false"
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            REF="${{ github.ref }}"
+
+            # Always on main/testing pushes
+            if [ "$REF" = "refs/heads/main" ] || [ "$REF" = "refs/heads/testing" ]; then
+              RUN="true"
+            else
+              # Optional on push if no PR open + commit contains [run-it]
+              MSG="${{ github.event.head_commit.message }}"
+              if [ "${{ needs.should-run-on-push.outputs.has_pr }}" = "false" ] && echo "$MSG" | grep -q "\[run-it\]"; then
+                RUN="true"
+              fi
+            fi
+
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            # Run on PR only if LAST commit message contains [run-it]
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+
+            LAST_MSG=$(gh api \
+              repos/${{ github.repository }}/pulls/$PR_NUMBER/commits \
+              --jq '.[-1].commit.message')
+
+            if echo "$LAST_MSG" | grep -q "\[run-it\]"; then
+              RUN="true"
+            fi
+          fi
+
+          echo "run=$RUN" >> $GITHUB_OUTPUT
+
   integration-tests:
-    name: Integration Tests (only push to testing/main)
-    needs: checks
-    if: |
-      github.event_name == 'push' &&
-      (github.ref == 'refs/heads/testing' || github.ref == 'refs/heads/main')
+    name: Integration Tests
+    needs:
+      - checks
+      - should-run-on-push
+      - integration-gate
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
+    env:
+      DATABASE_URL: ${{secrets.DATABASE_URL}}
+    if: needs.integration-gate.outputs.run == 'true'
     runs-on: ubuntu-latest
 
     services:
@@ -170,14 +386,55 @@ jobs:
       - name: Install dependencies (uses cache)
         run: pnpm install --frozen-lockfile
 
+      - name: Install whois (required for WHOIS integration tests)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y whois
+          whois --version || true 
+
       - name: Generate Prisma
         run: pnpm prisma generate
-      
+
       - name: Run migrations
         run: pnpm prisma migrate deploy
 
-      - name: Integration tests
+      - name: Run integration tests
+        env:
+          RUN_WHOIS_INTEGRATION: "1"
         run: pnpm test:integration
+
+      - name: Publish integration tests report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Integration tests report
+          path: reports/integration/junit.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Generate integration tests coverage summary
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const p = "coverage/integration/coverage-summary.json";
+          if (!fs.existsSync(p)) { console.log("No coverage summary found"); process.exit(0); }
+          const s = JSON.parse(fs.readFileSync(p, "utf8")).total;
+          
+          const md = [
+            "## Integration tests coverage",
+            "",
+            "| Metric | Coverage (%) |",
+            "|---|---:|",
+            `| Lines | ${s.lines.pct}% |`,
+            `| Statements | ${s.statements.pct}% |`,
+            `| Functions | ${s.functions.pct}% |`,
+            `| Branches | ${s.branches.pct}% |`,
+            ""
+          ].join("\n");
+          
+          require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+          NODE
 
   build:
     name: Build (only testing/main)
@@ -211,5 +468,8 @@ jobs:
       - name: Generate Prisma
         run: pnpm prisma generate
 
-      - name: Build
+      - name: Build application
         run: pnpm run build
+
+      - name: Build domain enrichment worker
+        run: "pnpm run build:workers"
