@@ -16,8 +16,8 @@ spec:
         app.kubernetes.io/component: domain-enrichment-worker
     spec:
       containers:
-        - name: worker-domain
-          image: ghcr.io/raresmusea/linklite:testing-REPLACE-WITH-SHA
+        - name: domain-enrichment-worker
+          image: ghcr.io/raresmusea/linklite:testing-current
           command: ["sh", "-lc", "pnpm start:domain-enrichment-worker"]
           envFrom:
             - configMapRef:
