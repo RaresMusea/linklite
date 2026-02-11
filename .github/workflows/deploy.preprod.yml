@@ -32,6 +32,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-north-1
 
+
       - name: Debug raw URL
         run: |
           set -euo pipefail
