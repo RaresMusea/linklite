@@ -27,7 +27,7 @@ git fetch -q --depth 1 origin "${HEAD_SHA}"
 # Only materialize the directories you need (cone mode => directories, not files)
 git sparse-checkout init --cone
 git sparse-checkout set \
-  ".github/scripts/deploy/preprod-k3s" \
+  ".github/scripts/deploy/preprod-k8s" \
   "deploy/k8s/preprod"
 
 git checkout -q -f FETCH_HEAD
@@ -37,4 +37,4 @@ rm -rf .git
 
 chmod +x .github/scripts/deploy/preprod-k3s/deploy.sh
 export IMAGE_TAG HEAD_SHA REPO
-.github/scripts/deploy/preprod-k3s/deploy.sh
+.github/scripts/deploy/preprod-k8s/deploy.sh
