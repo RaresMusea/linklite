@@ -11,7 +11,7 @@ LOG_FORMAT=pretty
 
 : "${IMAGE_TAG:?IMAGE_TAG is required}"
 
-IMAGE_WEB_BASE="ghcr.io/${GHCR_USER}/linklite-web"
+IMAGE_WEB_BASE="ghcr.io/${GHCR_USER}/linklite-app"
 IMAGE_WORKER_BASE="ghcr.io/${GHCR_USER}/linklite-worker"
 IMAGE_MIGRATE_BASE="ghcr.io/${GHCR_USER}/linklite-migrate"
 
