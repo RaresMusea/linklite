@@ -10,64 +10,73 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - '5432:5432'
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: [ 'CMD-SHELL', 'pg_isready -U $POSTGRES_USER -d $POSTGRES_DB' ]
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 20
 
-  app:
-    build: &app_build
+  migrate:
+    build:
       context: .
+      target: migrate
+      args:
+        DATABASE_URL: ${DATABASE_URL}
+    env_file:
+      - .env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: run
       args:
         DATABASE_URL: ${DATABASE_URL}
     container_name: linklite-app
     restart: unless-stopped
-    env_file: &common_env
+    env_file:
       - .env.docker
     ports:
       - "3000:3000"
     depends_on:
       migrate:
         condition: service_completed_successfully
-    command: >
-      sh -lc "pnpm prisma migrate deploy &&
-              pnpm start"
-
-  migrate:
-    build: *app_build
-    env_file: *common_env
-    depends_on:
-      db:
-        condition: service_healthy
-    command: >
-      sh -lc "pnpm prisma migrate deploy"
-    restart: "no"
 
   domain-enrichment-worker:
-    build: *app_build
+    build:
+      context: .
+      target: worker-run
+      args:
+        DATABASE_URL: ${DATABASE_URL}
     container_name: linklite-domain-enrichment-worker
     restart: unless-stopped
-    env_file: *common_env
+    env_file:
+      - .env.docker
     depends_on:
       migrate:
         condition: service_completed_successfully
-    command: >
-      sh -lc "pnpm start:domain-enrichment-worker"
+    command: ["node", "dist/worker/domain_enrichment/domain_enrichment_worker.js"]
 
   link-enrichment-worker:
-    build: *app_build
+    build:
+      context: .
+      target: worker-run
+      args:
+        DATABASE_URL: ${DATABASE_URL}
     container_name: linklite-link-enrichment-worker
     restart: unless-stopped
-    env_file: *common_env
+    env_file:
+      - .env.docker
     depends_on:
       migrate:
         condition: service_completed_successfully
-    command: >
-      sh -lc "pnpm start:link-enrichment-worker"
+    command: ["node", "dist/worker/link_enrichment/link_enrichment_worker.js"]
 
 volumes:
   pgdata:
