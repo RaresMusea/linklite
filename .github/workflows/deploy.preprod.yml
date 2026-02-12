@@ -14,6 +14,7 @@ env:
   HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
   REPO: ${{ github.repository }}
 
+
 jobs:
   deploy:
     if: |
@@ -43,7 +44,7 @@ jobs:
               \"export IMAGE_TAG=${IMAGE_TAG}\",
               \"export HEAD_SHA=${HEAD_SHA}\",
               \"export REPO=${REPO}\",
-              \"curl -fsSL https://raw.githubusercontent.com/${REPO}/${HEAD_SHA}/.github/scripts/deploy/preprod-k3s/bootstrap.sh -o /tmp/bootstrap.sh\",
+              \"curl -fsSL https://raw.githubusercontent.com/${REPO}/${HEAD_SHA}/.github/scripts/deploy/preprod-k8s/bootstrap.sh -o /tmp/bootstrap.sh\",
               \"chmod +x /tmp/bootstrap.sh\",
               \"/tmp/bootstrap.sh\"
             ]"

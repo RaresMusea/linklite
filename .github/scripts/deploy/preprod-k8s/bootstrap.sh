@@ -17,6 +17,9 @@ sudo mkdir -p "${WORKDIR}"
 sudo chown ssm-user:ssm-user "${WORKDIR}"
 cd "${WORKDIR}"
 
+export HOME=/home/ssm-user
+git config --global --add safe.directory "${WORKDIR}"
+
 git init -q
 git remote add origin "https://github.com/${REPO}.git" 2>/dev/null || true
 git remote set-url origin "https://github.com/${REPO}.git"
@@ -27,7 +30,7 @@ git fetch -q --depth 1 origin "${HEAD_SHA}"
 # Only materialize the directories you need (cone mode => directories, not files)
 git sparse-checkout init --cone
 git sparse-checkout set \
-  ".github/scripts/deploy/preprod-k3s" \
+  ".github/scripts/deploy/preprod-k8s" \
   "deploy/k8s/preprod"
 
 git checkout -q -f FETCH_HEAD
@@ -35,6 +38,6 @@ git checkout -q -f FETCH_HEAD
 # Remove git metadata (keep only files)
 rm -rf .git
 
-chmod +x .github/scripts/deploy/preprod-k3s/deploy.sh
+chmod +x .github/scripts/deploy/preprod-k8s/deploy.sh
 export IMAGE_TAG HEAD_SHA REPO
-.github/scripts/deploy/preprod-k3s/deploy.sh
+.github/scripts/deploy/preprod-k8s/deploy.sh
