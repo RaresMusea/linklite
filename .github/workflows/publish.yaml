@@ -37,18 +37,39 @@ jobs:
           SHA="${{github.sha}}"
           BRANCH="${{github.ref_name}}"
           
-          TAG_SHA="${REPO}:${BRANCH}-${SHA}"
-          TAG_BRANCH="${REPO}:${BRANCH}"
-          
-          echo "tags=${TAG_SHA},${TAG_BRANCH}" >> "$GITHUB_OUTPUT"
-          echo "tag_sha=${TAG_SHA}" >> "$GITHUB_OUTPUT"
+          echo "app_tags=${REPO}-web:${BRANCH}-${SHA},${REPO}-web:${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "worker_tags=${REPO}-worker:${BRANCH}-${SHA},${REPO}-worker:${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "migrate_tags=${REPO}-migrate:${BRANCH}-${SHA},${REPO}-migrate:${BRANCH}" >> "$GITHUB_OUTPUT"
 
-      - name: Build & push (multi-arch)
+      - name: Build & push app (multi-arch)
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: run
           push: true
           platforms: linux/arm64,linux/amd64
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: ${{ steps.tags.outputs.app_tags }}
           build-args: |
-            DATABASE_URL=${{secrets.DATABASE_URL}}
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+
+      - name: Build & push workers (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: worker-run
+          push: true
+          platforms: linux/arm64,linux/amd64
+          tags: ${{ steps.tags.outputs.worker_tags }}
+          build-args: |
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+
+      - name: Build & push migrate (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migrate
+          push: true
+          platforms: linux/arm64,linux/amd64
+          tags: ${{ steps.tags.outputs.migrate_tags }}
+          build-args: |
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
