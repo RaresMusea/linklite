@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: ghcr.io/raresmusea/linklite:testing-current
+          image: ghcr.io/raresmusea/linklite-app:testing-current
           imagePullPolicy: IfNotPresent
 
           ports:
