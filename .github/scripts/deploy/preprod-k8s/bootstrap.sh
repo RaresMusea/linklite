@@ -38,6 +38,6 @@ git checkout -q -f FETCH_HEAD
 # Remove git metadata (keep only files)
 rm -rf .git
 
-chmod +x .github/scripts/deploy/preprod-k3s/deploy.sh
+chmod +x .github/scripts/deploy/preprod-k8s/deploy.sh
 export IMAGE_TAG HEAD_SHA REPO
 .github/scripts/deploy/preprod-k8s/deploy.sh
