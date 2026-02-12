@@ -49,7 +49,7 @@ spec:
             exec:
               command:
                 - sh
-                - c
+                - -c
                 - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
             initialDelaySeconds: 10
             periodSeconds: 5
