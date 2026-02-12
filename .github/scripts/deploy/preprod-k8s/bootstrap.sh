@@ -17,6 +17,9 @@ sudo mkdir -p "${WORKDIR}"
 sudo chown ssm-user:ssm-user "${WORKDIR}"
 cd "${WORKDIR}"
 
+export HOME=/home/ssm-user
+git config --global --add safe.directory "${WORKDIR}"
+
 git init -q
 git remote add origin "https://github.com/${REPO}.git" 2>/dev/null || true
 git remote set-url origin "https://github.com/${REPO}.git"
