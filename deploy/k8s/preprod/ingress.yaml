@@ -5,6 +5,10 @@ metadata:
   namespace: linklite-preprod
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - preprod.linklite.dev
+      secretName: linklite-origin-tls
   rules:
     - host: preprod.linklite.dev
       http:
