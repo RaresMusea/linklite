@@ -1,26 +1,48 @@
-name: Publish (GHCR CI)
+name: Publish (GHCR pre-dev)
 
 on:
   push:
-    branches: [ "testing", "main" ]
+    branches:
+      - "feature/ll-*"
 
 concurrency:
-  group: publish-${{ github.ref }}
+  group: publish-predev-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build_and_publish:
+    # Only build/push when the HEAD commit has the marker
+    if: contains(github.event.head_commit.message, '[build-ghcr-images]')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      pull-requests: read
-      issues: read
 
+    # Use a PAT to read PRs + issue comments reliably (avoids 403)
+    # Create secret GH_READ_TOKEN with:
+    # - Pull requests: Read
+    # - Issues: Read
+    # - (optional) Contents: Read
     env:
       GH_TOKEN: ${{ secrets.GH_READ_TOKEN }}
 
     steps:
+      - name: Validate branch name (feature/ll-<number>...)
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH="${{ github.ref_name }}"
+
+          if [[ ! "$BRANCH" =~ ^feature/ll-[0-9]+ ]]; then
+            echo "Branch '$BRANCH' does not match required pattern: feature/ll-<number>..."
+            exit 1
+          fi
+
+          LL="$(echo "$BRANCH" | sed -nE 's/^feature\/(ll-[0-9]+).*/\1/p')"
+          echo "ll=$LL" >> "$GITHUB_OUTPUT"
+          echo "Ticket tag: $LL"
+
       - uses: actions/checkout@v4
 
       - uses: docker/setup-qemu-action@v3
@@ -33,7 +55,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract PR title + changelog comment (merge commit -> PR)
+      - name: Extract PR title + changelog comment (PR -> develop)
         id: prmeta
         shell: bash
         env:
@@ -41,21 +63,26 @@ jobs:
         run: |
           set -euo pipefail
 
-          SHA="${{ github.sha }}"
           BRANCH="${{ github.ref_name }}"
 
-          # Find PRs associated with this commit, then prefer merged PRs into current branch.
-          PR_NUMBER="$(gh api "/repos/${{ github.repository }}/commits/${SHA}/pulls" \
-            --jq '[.[] | select(.base.ref == "'"${BRANCH}"'" )] | sort_by(.merged_at) | last | .number // empty' 2>/dev/null || true)"
+          # More robust than search/issues for branch names containing slashes.
+          # Prefer the most recently updated PR targeting develop for this head branch.
+          PR_NUMBER="$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head "$BRANCH" \
+            --base "develop" \
+            --state "all" \
+            --json number,updatedAt \
+            --jq 'sort_by(.updatedAt) | last | .number // empty' 2>/dev/null || true)"
 
           PR_NUMBER="$(echo "${PR_NUMBER:-}" | tr -d '[:space:]')"
-          echo "Resolved PR_NUMBER='${PR_NUMBER:-}' for commit ${SHA}"
+          echo "Resolved PR_NUMBER='${PR_NUMBER:-}'"
 
           if ! [[ "${PR_NUMBER:-}" =~ ^[0-9]+$ ]]; then
-            echo "No PR found for this commit -> ${BRANCH}. Using fallback metadata."
-            echo "title=publish-${BRANCH}" >> "$GITHUB_OUTPUT"
-            echo "desc=PR title: publish-${BRANCH} | Changelog: (no changelog found) | See PR: https://github.com/${{ github.repository }}/commit/${SHA}" >> "$GITHUB_OUTPUT"
-            echo "pr_url=https://github.com/${{ github.repository }}/commit/${SHA}" >> "$GITHUB_OUTPUT"
+            echo "No PR found for branch -> develop. Using fallback metadata."
+            echo "title=pre-dev build" >> "$GITHUB_OUTPUT"
+            echo "desc=pre-dev build triggered by [build-ghcr-images]" >> "$GITHUB_OUTPUT"
+            echo "pr_url=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -63,10 +90,13 @@ jobs:
           PR_URL="$(gh api "/repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq '.html_url')"
           PR_BODY="$(gh api "/repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq '.body // empty' || true)"
 
-          CHANGELOG="$(gh api "/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" --paginate \
+          CHANGELOG="$(gh api /repos/${{ github.repository }}/issues/${PR_NUMBER}/comments --paginate \
             --jq '[.[] | select(.body | test("(?i)^Changelog:"))] | last | .body // empty' || true)"
 
-          # Fallback: if no changelog comment, try PR body changelog section or full body.
+          # Fallback: if no changelog comment, try to extract from PR body.
+          # It supports:
+          # - a "Changelog:" section
+          # - otherwise the full PR body (cleaned)
           if [ -z "${CHANGELOG:-}" ] && [ -n "${PR_BODY:-}" ]; then
             BODY_CHANGELOG="$(
               printf '%s\n' "$PR_BODY" | awk '
@@ -90,32 +120,40 @@ jobs:
           fi
 
           TITLE_CLEAN="$(echo "$TITLE" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-160)"
+
           if [ -z "${CHANGELOG:-}" ]; then
             CHANGELOG_CLEAN="(no changelog found)"
           else
             CHANGELOG_CLEAN="$(echo "$CHANGELOG" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-220)"
           fi
 
+          # Keep it concise and deterministic for GHCR (<=512 chars).
+          # NOTE: buildx annotations/labels are line-based key=value entries.
+          # Real newlines in values break parsing, so keep description single-line.
           DESC="PR title: ${TITLE_CLEAN} | Changelog: ${CHANGELOG_CLEAN} | See PR: ${PR_URL}"
           DESC="$(echo "$DESC" | cut -c1-512)"
 
-          echo "title=$TITLE_CLEAN" >> "$GITHUB_OUTPUT"
-          echo "desc=$DESC" >> "$GITHUB_OUTPUT"
-          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          {
+            echo "title=$TITLE_CLEAN"
+            echo "pr_url=$PR_URL"
+            echo "desc=$DESC"
+          } >> "$GITHUB_OUTPUT"
+          echo "Computed title: $TITLE_CLEAN"
           echo "Computed description length: $(echo -n "$DESC" | wc -c)"
 
       - name: Compute tags
         id: tags
         shell: bash
         run: |
+          set -euo pipefail
           OWNER_LC="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
-          REPO="ghcr.io/${OWNER_LC}/linklite"
-          SHA="${{github.sha}}"
-          BRANCH="${{github.ref_name}}"
-          
-          echo "app_tags=${REPO}-web:${BRANCH}-${SHA},${REPO}-web:${BRANCH}" >> "$GITHUB_OUTPUT"
-          echo "worker_tags=${REPO}-worker:${BRANCH}-${SHA},${REPO}-worker:${BRANCH}" >> "$GITHUB_OUTPUT"
-          echo "migrate_tags=${REPO}-migrate:${BRANCH}-${SHA},${REPO}-migrate:${BRANCH}" >> "$GITHUB_OUTPUT"
+          BASE="ghcr.io/${OWNER_LC}/linklite"
+          SHA="${{ github.sha }}"
+          LL="${{ steps.validate.outputs.ll }}"
+
+          echo "app_tags=${BASE}-app:staging-${LL}-${SHA},${BASE}-app:staging-${LL}" >> "$GITHUB_OUTPUT"
+          echo "worker_tags=${BASE}-worker:staging-${LL}-${SHA},${BASE}-worker:staging-${LL}" >> "$GITHUB_OUTPUT"
+          echo "migrate_tags=${BASE}-migrate:staging-${LL}-${SHA},${BASE}-migrate:staging-${LL}" >> "$GITHUB_OUTPUT"
 
       - name: Build & push app (multi-arch)
         uses: docker/build-push-action@v6
