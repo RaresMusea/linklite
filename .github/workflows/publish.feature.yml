@@ -90,7 +90,7 @@ jobs:
           PR_URL="$(gh api "/repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq '.html_url')"
 
           CHANGELOG="$(gh api /repos/${{ github.repository }}/issues/${PR_NUMBER}/comments --paginate \
-            --jq '[.[] | select(.body | test("(?i)^changelog:"))] | last | .body // empty' || true)"
+            --jq '[.[] | select(.body | test("(?i)^Changelog:"))] | last | .body // empty' || true)"
 
           TITLE_CLEAN="$(echo "$TITLE" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-200)"
 
@@ -115,7 +115,7 @@ jobs:
           SHA="${{ github.sha }}"
           LL="${{ steps.validate.outputs.ll }}"
 
-          echo "web_tags=${BASE}-web:staging-${LL}-${SHA},${BASE}-web:staging-${LL}" >> "$GITHUB_OUTPUT"
+          echo "app_tags=${BASE}-web:staging-${LL}-${SHA},${BASE}-app:staging-${LL}" >> "$GITHUB_OUTPUT"
           echo "worker_tags=${BASE}-worker:staging-${LL}-${SHA},${BASE}-worker:staging-${LL}" >> "$GITHUB_OUTPUT"
           echo "migrate_tags=${BASE}-migrate:staging-${LL}-${SHA},${BASE}-migrate:staging-${LL}" >> "$GITHUB_OUTPUT"
 
@@ -170,5 +170,8 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
             org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
+          annotations: |
+            org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
           build-args: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
