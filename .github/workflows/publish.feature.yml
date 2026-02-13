@@ -128,17 +128,15 @@ jobs:
           fi
 
           # Keep it concise and deterministic for GHCR (<=512 chars).
-          # Use real newlines so GHCR can render multiline text if supported.
-          DESC="$(printf 'PR title: %s\nChangelog: %s\nSee PR: %s' \
-            "$TITLE_CLEAN" "$CHANGELOG_CLEAN" "$PR_URL")"
+          # NOTE: buildx annotations/labels are line-based key=value entries.
+          # Real newlines in values break parsing, so keep description single-line.
+          DESC="PR title: ${TITLE_CLEAN} | Changelog: ${CHANGELOG_CLEAN} | See PR: ${PR_URL}"
           DESC="$(echo "$DESC" | cut -c1-512)"
 
           {
             echo "title=$TITLE_CLEAN"
             echo "pr_url=$PR_URL"
-            echo "desc<<EOF"
-            echo "$DESC"
-            echo "EOF"
+            echo "desc=$DESC"
           } >> "$GITHUB_OUTPUT"
           echo "Computed title: $TITLE_CLEAN"
           echo "Computed description length: $(echo -n "$DESC" | wc -c)"
