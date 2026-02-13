@@ -115,18 +115,18 @@ jobs:
           SHA="${{ github.sha }}"
           LL="${{ steps.validate.outputs.ll }}"
 
-          echo "app_tags=${BASE}-web:staging-${LL}-${SHA},${BASE}-app:staging-${LL}" >> "$GITHUB_OUTPUT"
+          echo "app_tags=${BASE}-app:staging-${LL}-${SHA},${BASE}-app:staging-${LL}" >> "$GITHUB_OUTPUT"
           echo "worker_tags=${BASE}-worker:staging-${LL}-${SHA},${BASE}-worker:staging-${LL}" >> "$GITHUB_OUTPUT"
           echo "migrate_tags=${BASE}-migrate:staging-${LL}-${SHA},${BASE}-migrate:staging-${LL}" >> "$GITHUB_OUTPUT"
 
-      - name: Build & push web (multi-arch)
+      - name: Build & push app (multi-arch)
         uses: docker/build-push-action@v6
         with:
           context: .
           target: run
           push: true
           platforms: linux/arm64,linux/amd64
-          tags: ${{ steps.tags.outputs.web_tags }}
+          tags: ${{ steps.tags.outputs.app_tags }}
           labels: |
             org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
             org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
