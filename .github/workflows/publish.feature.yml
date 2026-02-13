@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - "feature/ll-*"
-env:
-  GH_TOKEN: ${{ github.token }}
+
 concurrency:
   group: publish-predev-${{ github.ref }}
   cancel-in-progress: true
@@ -17,23 +16,23 @@ jobs:
     permissions:
       contents: read
       packages: write
-      pull-requests: read
+
+    env:
+      # IMPORTANT: use a PAT that can read PRs + issue comments
+      GH_TOKEN: ${{ secrets.GH_READ_TOKEN }}
 
     steps:
-      - name: Validate branch name)
+      - name: Validate branch name (feature/ll-<number>...)
         id: validate
         run: |
           set -euo pipefail
           BRANCH="${{ github.ref_name }}"
-
           if [[ ! "$BRANCH" =~ ^feature/ll-[0-9]+ ]]; then
-            echo "Branch '$BRANCH' does not match required pattern: feature/ll-<issue_number>..."
+            echo "Branch '$BRANCH' does not match: feature/ll-<number>..."
             exit 1
           fi
-
           LL=$(echo "$BRANCH" | sed -nE 's/^feature\/(ll-[0-9]+).*/\1/p')
           echo "ll=$LL" >> "$GITHUB_OUTPUT"
-          echo "Using issue tag: $LL"
 
       - uses: actions/checkout@v4
 
@@ -52,26 +51,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Find PR whose head is this branch and base is develop
-          # This works well for "pre-dev" PRs (feature -> develop).
-          PR_JSON=$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${{ github.repository }}/pulls" \
-            -f state=open \
-            --jq "[.[] | select(.head.ref==\"${{ github.ref_name }}\") | select(.base.ref==\"develop\")] | .[0] // empty" \
-            || true)
+          BRANCH="${{ github.ref_name }}"
+          SHORT="${BRANCH##*/}"
 
-          if [ -z "${PR_JSON:-}" ]; then
-            # Fallback: maybe PR already merged/closed - search closed PRs
-            PR_JSON=$(gh api \
-              -H "Accept: application/vnd.github+json" \
-              "/repos/${{ github.repository }}/pulls" \
-              -f state=closed \
-              --jq "[.[] | select(.head.ref==\"${{ github.ref_name }}\") | select(.base.ref==\"develop\")] | .[0] // empty" \
-              || true)
-          fi
+          find_pr () {
+            local state="$1"
+            local head="$2"
+            gh api search/issues \
+              -f q="repo:${{ github.repository }} is:pr is:${state} head:${{ github.repository_owner }}:${head} base:develop" \
+              --jq '.items[0].number // empty' 2>/dev/null || true
+          }
 
-          if [ -z "${PR_JSON:-}" ]; then
+          PR_NUMBER="$(find_pr open "$BRANCH")"
+          [ -z "${PR_NUMBER:-}" ] && PR_NUMBER="$(find_pr open "$SHORT")"
+          [ -z "${PR_NUMBER:-}" ] && PR_NUMBER="$(find_pr closed "$BRANCH")"
+          [ -z "${PR_NUMBER:-}" ] && PR_NUMBER="$(find_pr closed "$SHORT")"
+
+          if [ -z "${PR_NUMBER:-}" ]; then
             echo "No PR found for branch -> develop. Using fallback metadata."
             echo "title=pre-dev build" >> "$GITHUB_OUTPUT"
             echo "desc=pre-dev build triggered by [build-ghcr-images]" >> "$GITHUB_OUTPUT"
@@ -79,20 +75,18 @@ jobs:
             exit 0
           fi
 
-          PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
-          TITLE=$(echo "$PR_JSON" | jq -r '.title')
-          PR_URL=$(echo "$PR_JSON" | jq -r '.html_url')
+          TITLE="$(gh api /repos/${{ github.repository }}/pulls/${PR_NUMBER} --jq '.title')"
+          PR_URL="$(gh api /repos/${{ github.repository }}/pulls/${PR_NUMBER} --jq '.html_url')"
 
-          # Pick latest PR comment starting with "changelog:"
-          CHANGELOG=$(gh api "/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" --paginate \
-            --jq '[.[] | select(.body | test("(?i)^changelog:"))] | last | .body // empty' || true)
+          CHANGELOG="$(gh api /repos/${{ github.repository }}/issues/${PR_NUMBER}/comments --paginate \
+            --jq '[.[] | select(.body | test("(?i)^changelog:"))] | last | .body // empty' || true)"
 
-          TITLE_CLEAN=$(echo "$TITLE" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-200)
+          TITLE_CLEAN="$(echo "$TITLE" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-200)"
 
           if [ -z "${CHANGELOG:-}" ]; then
             DESC="$TITLE_CLEAN"
           else
-            CHANGELOG_CLEAN=$(echo "$CHANGELOG" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-500)
+            CHANGELOG_CLEAN="$(echo "$CHANGELOG" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-500)"
             DESC="${TITLE_CLEAN} — ${CHANGELOG_CLEAN}"
           fi
 
@@ -102,17 +96,16 @@ jobs:
 
       - name: Compute tags
         id: tags
-        shell: bash
         run: |
           set -euo pipefail
           OWNER_LC="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
-          REPO="ghcr.io/${OWNER_LC}/linklite"
+          BASE="ghcr.io/${OWNER_LC}/linklite"
           SHA="${{ github.sha }}"
           LL="${{ steps.validate.outputs.ll }}"
 
-          echo "app_tags=${REPO}-web:staging-${LL}-${SHA},${REPO}-app:staging-${LL}" >> "$GITHUB_OUTPUT"
-          echo "worker_tags=${REPO}-worker:staging-${LL}-${SHA},${REPO}-worker:staging-${LL}" >> "$GITHUB_OUTPUT"
-          echo "migrate_tags=${REPO}-migrate:staging-${LL}-${SHA},${REPO}-migrate:staging-${LL}" >> "$GITHUB_OUTPUT"
+          echo "web_tags=${BASE}-web:staging-${LL}-${SHA},${BASE}-web:staging-${LL}" >> "$GITHUB_OUTPUT"
+          echo "worker_tags=${BASE}-worker:staging-${LL}-${SHA},${BASE}-worker:staging-${LL}" >> "$GITHUB_OUTPUT"
+          echo "migrate_tags=${BASE}-migrate:staging-${LL}-${SHA},${BASE}-migrate:staging-${LL}" >> "$GITHUB_OUTPUT"
 
       - name: Build & push web (multi-arch)
         uses: docker/build-push-action@v6
