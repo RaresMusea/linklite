@@ -113,7 +113,7 @@ jobs:
           SHA="${{github.sha}}"
           BRANCH="${{github.ref_name}}"
           
-          echo "app_tags=${REPO}-web:${BRANCH}-${SHA},${REPO}-web:${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "app_tags=${REPO}-web:${BRANCH}-${SHA},${REPO}-app:${BRANCH}" >> "$GITHUB_OUTPUT"
           echo "worker_tags=${REPO}-worker:${BRANCH}-${SHA},${REPO}-worker:${BRANCH}" >> "$GITHUB_OUTPUT"
           echo "migrate_tags=${REPO}-migrate:${BRANCH}-${SHA},${REPO}-migrate:${BRANCH}" >> "$GITHUB_OUTPUT"
 
