@@ -19,6 +19,13 @@ spec:
         - name: domain-enrichment-worker
           image: ghcr.io/raresmusea/linklite-worker:testing-current
           command: ["node", "dist/worker/domain_enrichment/domain_enrichment_worker.js"]
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "192Mi"
+            limits:
+              cpu: "500m"
+              memory: "384Mi"
           envFrom:
             - configMapRef:
                 name: linklite-config
