@@ -128,14 +128,17 @@ jobs:
           fi
 
           # Keep it concise and deterministic for GHCR (<=512 chars).
-          # Use \n markers so the UI can potentially render row-like content.
-          DESC="PR title: ${TITLE_CLEAN}\\nChangelog: ${CHANGELOG_CLEAN}\\nSee PR: ${PR_URL}"
+          # Use real newlines so GHCR can render multiline text if supported.
+          DESC="$(printf 'PR title: %s\nChangelog: %s\nSee PR: %s' \
+            "$TITLE_CLEAN" "$CHANGELOG_CLEAN" "$PR_URL")"
           DESC="$(echo "$DESC" | cut -c1-512)"
 
           {
             echo "title=$TITLE_CLEAN"
-            echo "desc=$DESC"
             echo "pr_url=$PR_URL"
+            echo "desc<<EOF"
+            echo "$DESC"
+            echo "EOF"
           } >> "$GITHUB_OUTPUT"
           echo "Computed title: $TITLE_CLEAN"
           echo "Computed description length: $(echo -n "$DESC" | wc -c)"
