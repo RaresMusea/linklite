@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: app
     app.kubernetes.io/environment: preprod
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: linklite
@@ -22,9 +22,15 @@ spec:
     spec:
       containers:
         - name: app
-          image: ghcr.io/raresmusea/linklite:testing-current
+          image: ghcr.io/raresmusea/linklite-app:testing-current
           imagePullPolicy: IfNotPresent
-
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "300Mi"
+            limits:
+              cpu: "800m"
+              memory: "768Mi"
           ports:
             - name: http
               containerPort: 3000

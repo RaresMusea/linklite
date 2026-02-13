@@ -13,10 +13,16 @@ on:
       - main
     paths-ignore:
       - "**/*.md"
+      - "deploy/**"
+      - Dockerfile
+      - docker-compose.yml
   pull_request:
     branches: [ "develop", "testing", "main" ]
     paths-ignore:
       - "**/*.md"
+      - "deploy/**"
+      - Dockerfile
+      - docker-compose.yml
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
