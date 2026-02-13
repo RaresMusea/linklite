@@ -88,25 +88,55 @@ jobs:
 
           TITLE="$(gh api "/repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq '.title')"
           PR_URL="$(gh api "/repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq '.html_url')"
+          PR_BODY="$(gh api "/repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq '.body // empty' || true)"
 
           CHANGELOG="$(gh api /repos/${{ github.repository }}/issues/${PR_NUMBER}/comments --paginate \
             --jq '[.[] | select(.body | test("(?i)^Changelog:"))] | last | .body // empty' || true)"
 
-          TITLE_CLEAN="$(echo "$TITLE" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-200)"
+          # Fallback: if no changelog comment, try to extract from PR body.
+          # It supports:
+          # - a "Changelog:" section
+          # - otherwise the full PR body (cleaned)
+          if [ -z "${CHANGELOG:-}" ] && [ -n "${PR_BODY:-}" ]; then
+            BODY_CHANGELOG="$(
+              printf '%s\n' "$PR_BODY" | awk '
+                BEGIN { IGNORECASE=1; in_section=0 }
+                /^[[:space:]]*changelog:[[:space:]]*$/ { in_section=1; next }
+                /^[[:space:]]*changelog:[[:space:]]+/ {
+                  in_section=1
+                  sub(/^[[:space:]]*[Cc]hangelog:[[:space:]]*/, "")
+                  print
+                  next
+                }
+                in_section { print }
+              '
+            )"
 
-          if [ -z "${CHANGELOG:-}" ]; then
-            DESC="$TITLE_CLEAN"
-          else
-            CHANGELOG_CLEAN="$(echo "$CHANGELOG" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-500)"
-            DESC="${TITLE_CLEAN} - ${CHANGELOG_CLEAN}"
+            if [ -n "${BODY_CHANGELOG:-}" ]; then
+              CHANGELOG="$BODY_CHANGELOG"
+            else
+              CHANGELOG="$PR_BODY"
+            fi
           fi
 
-          # GHCR expects a short OCI description (max 512 chars).
+          TITLE_CLEAN="$(echo "$TITLE" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-160)"
+
+          if [ -z "${CHANGELOG:-}" ]; then
+            CHANGELOG_CLEAN="(no changelog found)"
+          else
+            CHANGELOG_CLEAN="$(echo "$CHANGELOG" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-220)"
+          fi
+
+          # Keep it concise and deterministic for GHCR (<=512 chars).
+          # Use \n markers so the UI can potentially render row-like content.
+          DESC="PR title: ${TITLE_CLEAN}\\nChangelog: ${CHANGELOG_CLEAN}\\nSee PR: ${PR_URL}"
           DESC="$(echo "$DESC" | cut -c1-512)"
 
-          echo "title=$TITLE_CLEAN" >> "$GITHUB_OUTPUT"
-          echo "desc=$DESC" >> "$GITHUB_OUTPUT"
-          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          {
+            echo "title=$TITLE_CLEAN"
+            echo "desc=$DESC"
+            echo "pr_url=$PR_URL"
+          } >> "$GITHUB_OUTPUT"
           echo "Computed title: $TITLE_CLEAN"
           echo "Computed description length: $(echo -n "$DESC" | wc -c)"
 
