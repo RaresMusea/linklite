@@ -1,76 +1,160 @@
-# LinkLite — URL Shortener + Analytics
+# LinkLite
 
-LinkLite is a lightweight URL Shortener built with Next.js.  
-It lets you turn long, messy URLs into clean short links and track basic click analytics.  
-The app is intentionally simple on “business logic” so you can focus on ops/infrastructure.
+LinkLite is a Next.js + Prisma URL shortener project with:
 
----
+- a web app/API (`/api/shorten`, health/readiness endpoints),
+- PostgreSQL storage,
+- background workers for domain/link enrichment,
+- containerized runtime (Docker Compose),
+- Kubernetes manifests for preprod deployment.
 
-## Features
+## Current Capabilities
 
-- **Create short links**
-    - Auto-generated codes or **custom aliases**
-    - Optional **expiry date**
-    - Public / Private visibility
-    - Optional tags
+- Short URL creation via `POST /api/shorten`.
+- Validation and persistence with Prisma/PostgreSQL.
+- Background enrichment workers:
+  - domain enrichment (RDAP/WHOIS based metadata),
+  - link enrichment (redirect probing + shortener inference).
+- Operational endpoints:
+  - `GET /api/app/healthz`
+  - `GET /api/app/readyz`
 
-- **Fast redirects**
-    - `/[code]` redirects instantly to the original URL
-    - Handles not found / expired links gracefully
+## Stack
 
-- **Dashboard**
-    - List and manage your links
-    - Total clicks per link
-    - Quick actions: copy / view analytics / delete
+- Next.js 16 (App Router)
+- TypeScript
+- PostgreSQL 16
+- Prisma ORM
+- Vitest (unit, integration, UI)
+- Docker + Docker Compose
+- Kubernetes manifests (`deploy/k8s/preprod`)
+- GitHub Actions (CI + image publish + deployment)
 
-- **Analytics (MVP)**
-    - Total clicks
-    - Clicks over time (optional extension)
-    - Basic referrer/device/country breakdown (optional extension)
+## Local Development
 
----
+### Prerequisites
 
-## Tech Stack
+- Node.js 20+
+- `pnpm` (via Corepack recommended)
+- Docker Desktop (for local DB or full stack)
+- `whois` CLI if you run domain enrichment locally outside containers
 
-- **Next.js 16.x.x (App Router)**
-- **TypeScript**
-- **UI:** Tailwind / Shadcn-UI 
-- **Database: **Postgres (RDS/Neon) + Prisma ORM**
-- **CI:** GitHub Actions
+### Environment
 
-> The project is structured so the storage layer can be swapped without rewriting core logic.
+Project includes environment files:
 
----
+- `.env.local` for app/dev
+- `.env.test` for tests
+- `.env.docker` for Docker Compose
 
-[//]: # (## Project Structure &#40;high level&#41;)
+Core variables used by the app/services:
 
----
+- `DATABASE_URL`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_DB`
+- `PRISMA_CLIENT_ENGINE_TYPE`
+- `APP_ENV`, `APP_VERSION`, `APP_COMMIT`
+- `LOG_LEVEL`, `LOG_FORMAT`
 
-## Getting Started (locally)
+### Option A: Run Full Stack with Docker Compose
 
-### 1) Install dependencies
+This starts:
+
+- `db` (Postgres),
+- `migrate` (Prisma migrate deploy),
+- `app` (Next.js production server),
+- `domain-enrichment-worker`,
+- `link-enrichment-worker`.
 
 ```bash
-npm install
+docker compose --env-file .env.docker up --build
 ```
 
-### 2) Run the dev server
+App is exposed on `http://localhost:3000`.
+
+### Option B: Run App Locally, DB in Docker
 
 ```bash
-npm run dev
+corepack enable
+pnpm install --frozen-lockfile
+docker compose --env-file .env.docker up -d db
+pnpm prisma migrate deploy
+pnpm prisma generate
+pnpm dev
+```
+
+### Run Workers Locally
+
+```bash
+pnpm build:workers
+pnpm start:domain-enrichment-worker-local
+pnpm start:link-enrichment-worker-local
 ```
 
 ## Scripts
 
-[//]: # (npm test           # Tests &#40;if configured&#41;)
+```bash
+pnpm dev
+pnpm build
+pnpm start
+pnpm build:workers
+pnpm start:domain-enrichment-worker
+pnpm start:link-enrichment-worker
 
+pnpm lint
+pnpm typecheck
+
+pnpm test
+pnpm test:unit
+pnpm test:integration
+pnpm test:ui
 ```
-npm run dev        # Start Next.js in dev mode
-npm run build      # Production build
-npm run start      # Run production server locally
-npm run lint       # ESLint
-npm run typecheck  # TypeScript checks
+
+## Docker
+
+The `Dockerfile` is multi-stage with dedicated targets:
+
+- `run`: web app runtime image
+- `worker-run`: worker runtime image
+- `migrate`: migration job image
+
+`docker-compose.yml` orchestrates these services and runs migrations before app/workers start.
+
+## Kubernetes (Preprod)
+
+Kubernetes manifests are under `deploy/k8s/preprod`:
+
+- namespace/config/secrets
+- app deployment + service + ingress
+- domain/link worker deployments
+- postgres service + statefulset
+
+The GitHub Actions flow builds/pushes images to GHCR, then deploys to preprod via SSM and applies these manifests. Migrations are run as a Kubernetes Job during deployment.
+
+### Manual Apply (if needed)
+
+```bash
+kubectl apply -f deploy/k8s/preprod/namespace.yaml
+kubectl apply -f deploy/k8s/preprod/postgres/db-service.yaml
+kubectl apply -f deploy/k8s/preprod/postgres/stateful-set.yaml
+kubectl apply -f deploy/k8s/preprod/configmap.yaml
+kubectl apply -f deploy/k8s/preprod/app-service.yaml
+kubectl apply -f deploy/k8s/preprod/ingress.yaml
+kubectl apply -f deploy/k8s/preprod/app-deployment.yaml
+kubectl apply -f deploy/k8s/preprod/domain-enrichment-worker-deployment.yaml
+kubectl apply -f deploy/k8s/preprod/link-enrichment-worker-deployment.yaml
 ```
 
-[//]: # (### Deployment &#40;AWS&#41;)
+## Health and Readiness
 
+- Health: `GET /api/app/healthz`
+- Readiness: `GET /api/app/readyz`
+
+These are used by container/Kubernetes probes and deployment smoke checks.
+
+## Links
+
+- Preproduction app: [https://preprod.linklite.dev](https://preprod.linklite.dev)
+- Preproduction health: [https://preprod.linklite.dev/api/app/healthz](https://preprod.linklite.dev/api/app/healthz)
+- Preproduction readiness: [https://preprod.linklite.dev/api/app/readyz](https://preprod.linklite.dev/api/app/readyz)
