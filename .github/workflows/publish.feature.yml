@@ -1,0 +1,170 @@
+name: Publish (GHCR pre-dev)
+
+on:
+  push:
+    branches:
+      - "feature/ll-*"
+
+concurrency:
+  group: publish-predev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_publish:
+    if: contains(github.event.head_commit.message, '[build-ghcr-images]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: read
+
+    steps:
+      - name: Validate branch name)
+        id: validate
+        run: |
+          set -euo pipefail
+          BRANCH="${{ github.ref_name }}"
+
+          if [[ ! "$BRANCH" =~ ^feature/ll-[0-9]+ ]]; then
+            echo "Branch '$BRANCH' does not match required pattern: feature/ll-<issue_number>..."
+            exit 1
+          fi
+
+          LL=$(echo "$BRANCH" | sed -nE 's/^feature\/(ll-[0-9]+).*/\1/p')
+          echo "ll=$LL" >> "$GITHUB_OUTPUT"
+          echo "Using issue tag: $LL"
+
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract PR title + changelog comment (PR -> develop)
+        id: prmeta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Find PR whose head is this branch and base is develop
+          # This works well for "pre-dev" PRs (feature -> develop).
+          PR_JSON=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/pulls" \
+            -f state=open \
+            --jq "[.[] | select(.head.ref==\"${{ github.ref_name }}\") | select(.base.ref==\"develop\")] | .[0] // empty" \
+            || true)
+
+          if [ -z "${PR_JSON:-}" ]; then
+            # Fallback: maybe PR already merged/closed - search closed PRs
+            PR_JSON=$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${{ github.repository }}/pulls" \
+              -f state=closed \
+              --jq "[.[] | select(.head.ref==\"${{ github.ref_name }}\") | select(.base.ref==\"develop\")] | .[0] // empty" \
+              || true)
+          fi
+
+          if [ -z "${PR_JSON:-}" ]; then
+            echo "No PR found for branch -> develop. Using fallback metadata."
+            echo "title=pre-dev build" >> "$GITHUB_OUTPUT"
+            echo "desc=pre-dev build triggered by [build-ghcr-images]" >> "$GITHUB_OUTPUT"
+            echo "pr_url=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
+          TITLE=$(echo "$PR_JSON" | jq -r '.title')
+          PR_URL=$(echo "$PR_JSON" | jq -r '.html_url')
+
+          # Pick latest PR comment starting with "changelog:"
+          CHANGELOG=$(gh api "/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq '[.[] | select(.body | test("(?i)^changelog:"))] | last | .body // empty' || true)
+
+          TITLE_CLEAN=$(echo "$TITLE" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-200)
+
+          if [ -z "${CHANGELOG:-}" ]; then
+            DESC="$TITLE_CLEAN"
+          else
+            CHANGELOG_CLEAN=$(echo "$CHANGELOG" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-500)
+            DESC="${TITLE_CLEAN} — ${CHANGELOG_CLEAN}"
+          fi
+
+          echo "title=$TITLE_CLEAN" >> "$GITHUB_OUTPUT"
+          echo "desc=$DESC" >> "$GITHUB_OUTPUT"
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Compute tags
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          OWNER_LC="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          REPO="ghcr.io/${OWNER_LC}/linklite"
+          SHA="${{ github.sha }}"
+          LL="${{ steps.validate.outputs.ll }}"
+
+          echo "app_tags=${REPO}-web:staging-${LL}-${SHA},${REPO}-app:staging-${LL}" >> "$GITHUB_OUTPUT"
+          echo "worker_tags=${REPO}-worker:staging-${LL}-${SHA},${REPO}-worker:staging-${LL}" >> "$GITHUB_OUTPUT"
+          echo "migrate_tags=${REPO}-migrate:staging-${LL}-${SHA},${REPO}-migrate:staging-${LL}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push web (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: run
+          push: true
+          platforms: linux/arm64,linux/amd64
+          tags: ${{ steps.tags.outputs.web_tags }}
+          labels: |
+            org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
+          build-args: |
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+
+      - name: Build & push workers (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: worker-run
+          push: true
+          platforms: linux/arm64,linux/amd64
+          tags: ${{ steps.tags.outputs.worker_tags }}
+          labels: |
+            org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
+          build-args: |
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+
+      - name: Build & push migrate (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migrate
+          push: true
+          platforms: linux/arm64,linux/amd64
+          tags: ${{ steps.tags.outputs.migrate_tags }}
+          labels: |
+            org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
+          build-args: |
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
