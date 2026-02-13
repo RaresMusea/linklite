@@ -101,9 +101,14 @@ jobs:
             DESC="${TITLE_CLEAN} - ${CHANGELOG_CLEAN}"
           fi
 
+          # GHCR expects a short OCI description (max 512 chars).
+          DESC="$(echo "$DESC" | cut -c1-512)"
+
           echo "title=$TITLE_CLEAN" >> "$GITHUB_OUTPUT"
           echo "desc=$DESC" >> "$GITHUB_OUTPUT"
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "Computed title: $TITLE_CLEAN"
+          echo "Computed description length: $(echo -n "$DESC" | wc -c)"
 
       - name: Compute tags
         id: tags
@@ -134,6 +139,13 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
             org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
+          annotations: |
+            index:org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            index:org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.version=${{ github.ref_name }}
+            index:org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
           build-args: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
 
@@ -152,6 +164,13 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
             org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
+          annotations: |
+            index:org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            index:org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.version=${{ github.ref_name }}
+            index:org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
           build-args: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
 
@@ -171,7 +190,11 @@ jobs:
             org.opencontainers.image.version=${{ github.ref_name }}
             org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
           annotations: |
-            org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
-            org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            index:org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            index:org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.version=${{ github.ref_name }}
+            index:org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
           build-args: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
