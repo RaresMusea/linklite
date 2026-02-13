@@ -58,27 +58,27 @@ jobs:
       - name: Extract PR title + changelog comment (PR -> develop)
         id: prmeta
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_READ_TOKEN }}
         run: |
           set -euo pipefail
-
+          
           BRANCH="${{ github.ref_name }}"
           SHORT="${BRANCH##*/}"
-
-          # Find PR number via Search API (works better than listing pulls)
-          # Try open first, then closed; try full branch ref then short name.
+          
           find_pr () {
             local state="$1"
             local head="$2"
-            gh api search/issues \
+            gh api /search/issues \
               -f q="repo:${{ github.repository }} is:pr is:${state} head:${{ github.repository_owner }}:${head} base:develop" \
               --jq '.items[0].number // empty' 2>/dev/null || true
           }
-
+          
           PR_NUMBER="$(find_pr open "$BRANCH")"
           [ -z "${PR_NUMBER:-}" ] && PR_NUMBER="$(find_pr open "$SHORT")"
           [ -z "${PR_NUMBER:-}" ] && PR_NUMBER="$(find_pr closed "$BRANCH")"
           [ -z "${PR_NUMBER:-}" ] && PR_NUMBER="$(find_pr closed "$SHORT")"
-
+          
           if [ -z "${PR_NUMBER:-}" ]; then
             echo "No PR found for branch -> develop. Using fallback metadata."
             echo "title=pre-dev build" >> "$GITHUB_OUTPUT"
@@ -86,23 +86,22 @@ jobs:
             echo "pr_url=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
+          
           TITLE="$(gh api /repos/${{ github.repository }}/pulls/${PR_NUMBER} --jq '.title')"
           PR_URL="$(gh api /repos/${{ github.repository }}/pulls/${PR_NUMBER} --jq '.html_url')"
-
-          # Latest PR comment that starts with "changelog:"
+          
           CHANGELOG="$(gh api /repos/${{ github.repository }}/issues/${PR_NUMBER}/comments --paginate \
             --jq '[.[] | select(.body | test("(?i)^changelog:"))] | last | .body // empty' || true)"
-
+          
           TITLE_CLEAN="$(echo "$TITLE" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-200)"
-
+          
           if [ -z "${CHANGELOG:-}" ]; then
             DESC="$TITLE_CLEAN"
           else
             CHANGELOG_CLEAN="$(echo "$CHANGELOG" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-500)"
             DESC="${TITLE_CLEAN} — ${CHANGELOG_CLEAN}"
           fi
-
+          
           echo "title=$TITLE_CLEAN" >> "$GITHUB_OUTPUT"
           echo "desc=$DESC" >> "$GITHUB_OUTPUT"
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
