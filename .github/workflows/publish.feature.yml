@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - "feature/ll-*"
-
+env:
+  GH_TOKEN: ${{ github.token }}
 concurrency:
   group: publish-predev-${{ github.ref }}
   cancel-in-progress: true
@@ -48,8 +49,6 @@ jobs:
 
       - name: Extract PR title + changelog comment (PR -> develop)
         id: prmeta
-        env:
-          GH_TOKEN: ${{ secrets.GH_READ_TOKEN }}
         run: |
           set -euo pipefail
 
