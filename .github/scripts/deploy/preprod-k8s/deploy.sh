@@ -4,14 +4,22 @@ export KUBECONFIG=/home/ssm-user/.kube/config
 
 SSM_ENV="testing"
 NAMESPACE="linklite-preprod"
+APP_ENV="preprod"
 AWS_REGION="eu-north-1"
 
 : "${IMAGE_TAG:?IMAGE_TAG is required}"
 : "${HEAD_SHA:?HEAD_SHA is required}"
 
 GHCR_USER="raresmusea"
-IMAGE_BASE="ghcr.io/${GHCR_USER}/linklite"
-REMOTE_IMAGE="${IMAGE_BASE}:${IMAGE_TAG}"
+
+IMAGE_WEB_BASE="ghcr.io/${GHCR_USER}/linklite-app"
+IMAGE_WORKER_BASE="ghcr.io/${GHCR_USER}/linklite-worker"
+IMAGE_MIGRATE_BASE="ghcr.io/${GHCR_USER}/linklite-migrate"
+
+REMOTE_WEB="${IMAGE_WEB_BASE}:${IMAGE_TAG}"
+REMOTE_WORKER="${IMAGE_WORKER_BASE}:${IMAGE_TAG}"
+REMOTE_MIGRATE="${IMAGE_MIGRATE_BASE}:${IMAGE_TAG}"
+
 
 APP_DEPLOYMENT="linklite-app"
 WORKER_DOMAIN_DEPLOYMENT="linklite-domain-enrichment-worker"
@@ -30,13 +38,17 @@ getp() {
       --output text
 }
 
-echo "Deploying image: ${REMOTE_IMAGE}"
+echo "Deploying images:"
+echo "  WEB:    ${REMOTE_WEB}"
+echo "  WORKER: ${REMOTE_WORKER}"
+echo "  MIGRATE:${REMOTE_MIGRATE}"
 echo "Namespace: ${NAMESPACE}"
 
 POSTGRES_USER="$(getp POSTGRES_USER)"
 POSTGRES_PASSWORD="$(getp POSTGRES_PASSWORD)"
 POSTGRES_DB="$(getp POSTGRES_DB)"
 PRISMA_CLIENT_ENGINE_TYPE="$(getp PRISMA_CLIENT_ENGINE_TYPE)"
+APP_COMMIT_SHA="${IMAGE_TAG#testing-}"
 
 DB_HOST="db"
 DB_PORT="5432"
@@ -51,6 +63,9 @@ kubectl -n "${NAMESPACE}" create secret generic linklite-secrets \
   --from-literal=POSTGRES_DB="${POSTGRES_DB}" \
   --from-literal=PRISMA_CLIENT_ENGINE_TYPE="${PRISMA_CLIENT_ENGINE_TYPE}" \
   --from-literal=DATABASE_URL="${DATABASE_URL}" \
+  --from-literal=APP_ENV="${APP_ENV}" \
+  --from-literal=APP_COMMIT="${APP_COMMIT_SHA}" \
+  --from-literal=APP_VERSION="${IMAGE_TAG}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "Secrets synced."
@@ -101,14 +116,13 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: ${REMOTE_IMAGE}
+          image: ${REMOTE_MIGRATE}
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
                 name: linklite-config
             - secretRef:
                 name: linklite-secrets
-          command: ["sh", "-lc", "pnpm prisma migrate deploy"]
 EOF
 
 echo "Waiting for migrations job..."
@@ -120,9 +134,9 @@ kubectl -n "${NAMESPACE}" wait --for=condition=complete job/"${JOB_NAME}" --time
 
 echo "Updating deployments..."
 
-kubectl -n "${NAMESPACE}" set image deployment/${APP_DEPLOYMENT} app="${REMOTE_IMAGE}"
-kubectl -n "${NAMESPACE}" set image deployment/${WORKER_DOMAIN_DEPLOYMENT} domain-enrichment-worker="${REMOTE_IMAGE}"
-kubectl -n "${NAMESPACE}" set image deployment/${WORKER_LINK_DEPLOYMENT} link-enrichment-worker="${REMOTE_IMAGE}"
+kubectl -n "${NAMESPACE}" set image deployment/${APP_DEPLOYMENT} app="${REMOTE_WEB}"
+kubectl -n "${NAMESPACE}" set image deployment/${WORKER_DOMAIN_DEPLOYMENT} domain-enrichment-worker="${REMOTE_WORKER}"
+kubectl -n "${NAMESPACE}" set image deployment/${WORKER_LINK_DEPLOYMENT} link-enrichment-worker="${REMOTE_WORKER}"
 
 echo "Waiting for rollout..."
 
