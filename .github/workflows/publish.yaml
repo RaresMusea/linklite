@@ -15,6 +15,10 @@ jobs:
       contents: read
       packages: write
       pull-requests: read
+      issues: read
+
+    env:
+      GH_TOKEN: ${{ secrets.GH_READ_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +32,77 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract PR title + changelog comment (merge commit -> PR)
+        id: prmeta
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          SHA="${{ github.sha }}"
+          BRANCH="${{ github.ref_name }}"
+
+          # Find PRs associated with this commit, then prefer merged PRs into current branch.
+          PR_NUMBER="$(gh api "/repos/${{ github.repository }}/commits/${SHA}/pulls" \
+            --jq '[.[] | select(.base.ref == "'"${BRANCH}"'" )] | sort_by(.merged_at) | last | .number // empty' 2>/dev/null || true)"
+
+          PR_NUMBER="$(echo "${PR_NUMBER:-}" | tr -d '[:space:]')"
+          echo "Resolved PR_NUMBER='${PR_NUMBER:-}' for commit ${SHA}"
+
+          if ! [[ "${PR_NUMBER:-}" =~ ^[0-9]+$ ]]; then
+            echo "No PR found for this commit -> ${BRANCH}. Using fallback metadata."
+            echo "title=publish-${BRANCH}" >> "$GITHUB_OUTPUT"
+            echo "desc=PR title: publish-${BRANCH} | Changelog: (no changelog found) | See PR: https://github.com/${{ github.repository }}/commit/${SHA}" >> "$GITHUB_OUTPUT"
+            echo "pr_url=https://github.com/${{ github.repository }}/commit/${SHA}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TITLE="$(gh api "/repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq '.title')"
+          PR_URL="$(gh api "/repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq '.html_url')"
+          PR_BODY="$(gh api "/repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq '.body // empty' || true)"
+
+          CHANGELOG="$(gh api "/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq '[.[] | select(.body | test("(?i)^Changelog:"))] | last | .body // empty' || true)"
+
+          # Fallback: if no changelog comment, try PR body changelog section or full body.
+          if [ -z "${CHANGELOG:-}" ] && [ -n "${PR_BODY:-}" ]; then
+            BODY_CHANGELOG="$(
+              printf '%s\n' "$PR_BODY" | awk '
+                BEGIN { IGNORECASE=1; in_section=0 }
+                /^[[:space:]]*changelog:[[:space:]]*$/ { in_section=1; next }
+                /^[[:space:]]*changelog:[[:space:]]+/ {
+                  in_section=1
+                  sub(/^[[:space:]]*[Cc]hangelog:[[:space:]]*/, "")
+                  print
+                  next
+                }
+                in_section { print }
+              '
+            )"
+
+            if [ -n "${BODY_CHANGELOG:-}" ]; then
+              CHANGELOG="$BODY_CHANGELOG"
+            else
+              CHANGELOG="$PR_BODY"
+            fi
+          fi
+
+          TITLE_CLEAN="$(echo "$TITLE" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-160)"
+          if [ -z "${CHANGELOG:-}" ]; then
+            CHANGELOG_CLEAN="(no changelog found)"
+          else
+            CHANGELOG_CLEAN="$(echo "$CHANGELOG" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-220)"
+          fi
+
+          DESC="PR title: ${TITLE_CLEAN} | Changelog: ${CHANGELOG_CLEAN} | See PR: ${PR_URL}"
+          DESC="$(echo "$DESC" | cut -c1-512)"
+
+          echo "title=$TITLE_CLEAN" >> "$GITHUB_OUTPUT"
+          echo "desc=$DESC" >> "$GITHUB_OUTPUT"
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "Computed description length: $(echo -n "$DESC" | wc -c)"
 
       - name: Compute tags
         id: tags
@@ -50,6 +125,20 @@ jobs:
           push: true
           platforms: linux/arm64,linux/amd64
           tags: ${{ steps.tags.outputs.app_tags }}
+          labels: |
+            org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
+          annotations: |
+            index:org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            index:org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.version=${{ github.ref_name }}
+            index:org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
           build-args: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
 
@@ -61,6 +150,20 @@ jobs:
           push: true
           platforms: linux/arm64,linux/amd64
           tags: ${{ steps.tags.outputs.worker_tags }}
+          labels: |
+            org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
+          annotations: |
+            index:org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            index:org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.version=${{ github.ref_name }}
+            index:org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
           build-args: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
 
@@ -72,5 +175,19 @@ jobs:
           push: true
           platforms: linux/arm64,linux/amd64
           tags: ${{ steps.tags.outputs.migrate_tags }}
+          labels: |
+            org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
+          annotations: |
+            index:org.opencontainers.image.title=${{ steps.prmeta.outputs.title }}
+            index:org.opencontainers.image.description=${{ steps.prmeta.outputs.desc }}
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.version=${{ github.ref_name }}
+            index:org.opencontainers.image.url=${{ steps.prmeta.outputs.pr_url }}
           build-args: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
