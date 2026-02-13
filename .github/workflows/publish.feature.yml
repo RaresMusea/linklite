@@ -11,28 +11,37 @@ concurrency:
 
 jobs:
   build_and_publish:
+    # Only build/push when the HEAD commit has the marker
     if: contains(github.event.head_commit.message, '[build-ghcr-images]')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
+    # Use a PAT to read PRs + issue comments reliably (avoids 403)
+    # Create secret GH_READ_TOKEN with:
+    # - Pull requests: Read
+    # - Issues: Read
+    # - (optional) Contents: Read
     env:
-      # IMPORTANT: use a PAT that can read PRs + issue comments
       GH_TOKEN: ${{ secrets.GH_READ_TOKEN }}
 
     steps:
       - name: Validate branch name (feature/ll-<number>...)
         id: validate
+        shell: bash
         run: |
           set -euo pipefail
           BRANCH="${{ github.ref_name }}"
+
           if [[ ! "$BRANCH" =~ ^feature/ll-[0-9]+ ]]; then
-            echo "Branch '$BRANCH' does not match: feature/ll-<number>..."
+            echo "Branch '$BRANCH' does not match required pattern: feature/ll-<number>..."
             exit 1
           fi
-          LL=$(echo "$BRANCH" | sed -nE 's/^feature\/(ll-[0-9]+).*/\1/p')
+
+          LL="$(echo "$BRANCH" | sed -nE 's/^feature\/(ll-[0-9]+).*/\1/p')"
           echo "ll=$LL" >> "$GITHUB_OUTPUT"
+          echo "Ticket tag: $LL"
 
       - uses: actions/checkout@v4
 
@@ -48,12 +57,15 @@ jobs:
 
       - name: Extract PR title + changelog comment (PR -> develop)
         id: prmeta
+        shell: bash
         run: |
           set -euo pipefail
 
           BRANCH="${{ github.ref_name }}"
           SHORT="${BRANCH##*/}"
 
+          # Find PR number via Search API (works better than listing pulls)
+          # Try open first, then closed; try full branch ref then short name.
           find_pr () {
             local state="$1"
             local head="$2"
@@ -78,6 +90,7 @@ jobs:
           TITLE="$(gh api /repos/${{ github.repository }}/pulls/${PR_NUMBER} --jq '.title')"
           PR_URL="$(gh api /repos/${{ github.repository }}/pulls/${PR_NUMBER} --jq '.html_url')"
 
+          # Latest PR comment that starts with "changelog:"
           CHANGELOG="$(gh api /repos/${{ github.repository }}/issues/${PR_NUMBER}/comments --paginate \
             --jq '[.[] | select(.body | test("(?i)^changelog:"))] | last | .body // empty' || true)"
 
@@ -96,6 +109,7 @@ jobs:
 
       - name: Compute tags
         id: tags
+        shell: bash
         run: |
           set -euo pipefail
           OWNER_LC="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
