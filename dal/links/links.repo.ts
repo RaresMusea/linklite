@@ -1,4 +1,4 @@
-import { CreatedLink, CreateLinkInput } from '@/dal/links/links.types';
+import { CreatedLink, CreateLinkInput, LinkRedirectData } from '@/dal/links/links.types';
 import { prisma } from '@/lib/prisma';
 import { normalizeHostnameFromUrl } from '@/lib/utils';
 import { InvalidHostnameError } from '@/lib/errors/InvalidHostnameError';
@@ -89,4 +89,30 @@ export async function applyRedirectProbeResult(
             },
         });
     }
+}
+
+export async function findLinkForRedirect(slug: string): Promise<LinkRedirectData | null> {
+    const link = await prisma.link.findUnique({
+        where: { slug },
+        select: {
+            slug: true,
+            targetUrl: true,
+            isShortener: true,
+            redirectTargetUrl: true,
+            redirectStatusCode: true,
+            redirectCheckedAt: true,
+            domain: {
+                select: {
+                    hostname: true,
+                    status: true,
+                    registeredAt: true,
+                    checkedAt: true,
+                },
+            },
+        },
+    });
+
+    if (!link) return null;
+
+    return link;
 }
