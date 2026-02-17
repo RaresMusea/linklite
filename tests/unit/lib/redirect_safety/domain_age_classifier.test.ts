@@ -398,6 +398,7 @@ describe('isNewDomain', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        mockGetDaysAgeFrom.mockReset();
     });
 
     it('should return false when domain is null', () => {
@@ -461,6 +462,33 @@ describe('isNewDomain', () => {
 
         expect(isNewDomain(errorDomain)).toBe(false);
     });
+
+    it('should respect custom newDomainDays via options', () => {
+        const domain = baseDomain as Domain;
+        mockGetDaysAgeFrom
+            .mockReturnValueOnce(10) // checkedAt age
+            .mockReturnValueOnce(50); // registeredAt age
+
+        expect(isNewDomain(domain, { newDomainDays: 60 })).toBe(true);
+    });
+
+    it('should return false with default maxProviderCheckedAgeDays when checkedAt is stale', () => {
+        const domain = baseDomain as Domain;
+        mockGetDaysAgeFrom
+            .mockReturnValueOnce(50) // checkedAt age (stale with default 45)
+            .mockReturnValueOnce(10); // registeredAt age
+
+        expect(isNewDomain(domain)).toBe(false);
+    });
+
+    it('should respect custom maxProviderCheckedAgeDays via options', () => {
+        const domain = baseDomain as Domain;
+        mockGetDaysAgeFrom
+            .mockReturnValueOnce(50) // checkedAt age
+            .mockReturnValueOnce(10); // registeredAt age
+
+        expect(isNewDomain(domain, { maxProviderCheckedAgeDays: 60 })).toBe(true);
+    });
 });
 
 describe('domainAgeRiskFlag', () => {
@@ -478,6 +506,7 @@ describe('domainAgeRiskFlag', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        mockGetDaysAgeFrom.mockReset();
     });
 
     it('Returns unknown_domain_age with missing_domain reason when domain is null', () => {
