@@ -150,3 +150,11 @@ export function getPublicSuffix(hostname: string): string | null {
     // ex: "com", "ro", "co.uk"
     return res.publicSuffix ?? null;
 }
+
+export function isHttps(url: string): boolean {
+    try {
+        return new URL(url).protocol === 'https:';
+    } catch {
+        return false;
+    }
+}

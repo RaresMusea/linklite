@@ -6,6 +6,7 @@ import {
     getRegistrableDomain,
     getTld,
     isApiRouteResponseOf,
+    isHttps,
     normalizeHostnameFromUrl,
 } from '@/lib/utils';
 import { toASCII } from 'punycode';
@@ -659,5 +660,23 @@ describe('Public suffix retrieval', () => {
 
     it('normalizes case in the returned suffix', () => {
         expect(getPublicSuffix('WWW.Example.Co.UK')).toBe('co.uk');
+    });
+});
+
+describe('isHttps', () => {
+    it('returns true for valid HTTPS URLs', () => {
+        expect(isHttps('https://example.com')).toBe(true);
+        expect(isHttps('HTTPS://example.com/path?x=1#a')).toBe(true);
+    });
+
+    it('returns false for non-HTTPS but valid URLs', () => {
+        expect(isHttps('http://example.com')).toBe(false);
+        expect(isHttps('ftp://example.com/resource')).toBe(false);
+    });
+
+    it('returns false for malformed or non-URL input', () => {
+        expect(isHttps('not-a-url')).toBe(false);
+        expect(isHttps('')).toBe(false);
+        expect(isHttps('https://')).toBe(false);
     });
 });
