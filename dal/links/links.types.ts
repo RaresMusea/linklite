@@ -1,4 +1,5 @@
 import { hasNullableOrUndefinedString, hasString, isPlainObject } from '@/lib/guards';
+import { MinimalDomain } from '@/dal/domains/domains.types';
 
 export type CreateLinkInput = {
     slug: string;
@@ -17,6 +18,14 @@ export type CreatedLink = {
 export type CreatedLinkResponse = {
     created: CreatedLink;
     shortUrl: string;
+};
+
+export type LinkRiskInput = {
+    targetUrl: string;
+    isShortener: boolean;
+    hasRedirect: boolean;
+    redirectStatusCode?: number;
+    domain?: MinimalDomain | null;
 };
 
 export function isCreatedLink(x: unknown): x is CreatedLink {
