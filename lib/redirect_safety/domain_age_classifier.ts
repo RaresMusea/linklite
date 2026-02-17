@@ -80,6 +80,7 @@ export function domainAgeRiskFlag(domain: Domain | null): DomainAgeRiskFlag {
 
 export function isNewDomain(domain: MinimalDomain | null, options = {}): boolean {
     if (!domain) return false;
+
     return (
         classifyDomainAge({
             registeredAt: domain.registeredAt,

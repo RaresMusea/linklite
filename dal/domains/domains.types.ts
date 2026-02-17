@@ -53,3 +53,10 @@ export type DomainProviderLocks = {
     rdapFetchLockedUntil: Date | null;
     whoisFetchLockedUntil: Date | null;
 };
+
+export type MinimalDomain = {
+    hostname: string;
+    registeredAt: Date | null;
+    status: DomainStatus;
+    checkedAt: Date | null;
+};

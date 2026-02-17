@@ -36,3 +36,8 @@ export type RedirectProbeResult =
           targetUrl: string;
           targetHost: string;
       };
+
+export type DomainAgeRiskFlag =
+    | { kind: 'new_domain' }
+    | { kind: 'old_domain' }
+    | { kind: 'unknown_domain_age'; reason?: string };
