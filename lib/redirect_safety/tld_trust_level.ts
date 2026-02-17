@@ -210,3 +210,11 @@ export function isNonAllowlistedTld(hostname: string): boolean {
     if (!suffix) return true;
     return !HIGH_TRUST_SUFFIXES.has(suffix);
 }
+
+export type TldTrustLevel = 'high' | 'unknown' | 'low';
+
+export function getTldTrustLevel(hostname: string): TldTrustLevel {
+    if (hasLowTrustTld(hostname)) return 'low';
+    if (isNonAllowlistedTld(hostname)) return 'unknown';
+    return 'high';
+}
