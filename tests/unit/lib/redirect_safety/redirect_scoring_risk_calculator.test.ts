@@ -94,7 +94,7 @@ describe('calculateRedirectRiskScoring', () => {
         });
     });
 
-    it('adds missing_tld when domain is absent and skips domain-based checks', () => {
+    it('Adds missing_tld when domain is absent and skips domain-based checks', () => {
         const result = calculateRedirectRiskScoring({
             ...baseInput,
             domain: null,
@@ -112,7 +112,7 @@ describe('calculateRedirectRiskScoring', () => {
         expect(mockIsAllowlisted).not.toHaveBeenCalled();
     });
 
-    it('applies and orders all non-domain reasons correctly', () => {
+    it('Applies and orders all non-domain reasons correctly', () => {
         mockIsHttps.mockReturnValue(false);
         mockHasSuspiciousPath.mockReturnValue(true);
 
@@ -131,7 +131,7 @@ describe('calculateRedirectRiskScoring', () => {
         });
     });
 
-    it('adds temporary_redirect only for 302 with hasRedirect=true', () => {
+    it('Adds temporary_redirect only for 302 with hasRedirect=true', () => {
         const with301 = calculateRedirectRiskScoring({
             ...baseInput,
             hasRedirect: true,
@@ -157,7 +157,7 @@ describe('calculateRedirectRiskScoring', () => {
         expect(with302.reasons).toContain('temporary_redirect');
     });
 
-    it('uses tld_low_trust and not tld_unknown when low-trust check is true', () => {
+    it('Uses tld_low_trust and not tld_unknown when low-trust check is true', () => {
         mockHasLowTrustTld.mockReturnValue(true);
         mockIsNonAllowlistedTld.mockReturnValue(true); // should not be evaluated
 
@@ -168,7 +168,7 @@ describe('calculateRedirectRiskScoring', () => {
         expect(mockIsNonAllowlistedTld).not.toHaveBeenCalled();
     });
 
-    it('uses tld_unknown when not low-trust but non-allowlisted', () => {
+    it('Uses tld_unknown when not low-trust but non-allowlisted', () => {
         mockHasLowTrustTld.mockReturnValue(false);
         mockIsNonAllowlistedTld.mockReturnValue(true);
 
@@ -178,7 +178,7 @@ describe('calculateRedirectRiskScoring', () => {
         expect(result.reasons).not.toContain('tld_low_trust');
     });
 
-    it('adds domain_new and domain_not_allowlisted when applicable', () => {
+    it('Adds domain_new and domain_not_allowlisted when applicable', () => {
         mockIsNewDomain.mockReturnValue(true);
         mockIsAllowlisted.mockReturnValue(false);
 
@@ -191,7 +191,7 @@ describe('calculateRedirectRiskScoring', () => {
         });
     });
 
-    it('computes medium level correctly at score 3', () => {
+    it('Computes medium level correctly at score 3', () => {
         mockHasSuspiciousPath.mockReturnValue(true); // +2
         mockIsAllowlisted.mockReturnValue(false); // +1
 
@@ -204,7 +204,7 @@ describe('calculateRedirectRiskScoring', () => {
         });
     });
 
-    it('passes domain hostname override into suspicious path checker', () => {
+    it('Passes domain hostname override into suspicious path checker', () => {
         calculateRedirectRiskScoring(baseInput);
 
         expect(mockHasSuspiciousPath).toHaveBeenCalledWith(baseInput.targetUrl, domain.hostname);
