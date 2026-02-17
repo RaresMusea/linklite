@@ -139,9 +139,14 @@ export function getTld(hostname: string): string | null {
     return parts[parts.length - 1];
 }
 
-
 export function getRegistrableDomain(hostname: string): string | null {
     const res = parse(hostname, { allowPrivateDomains: true });
     // res.domain = registrable domain (ex: example.co.uk, example.com)
     return res.domain ?? null;
+}
+
+export function getPublicSuffix(hostname: string): string | null {
+    const res = parse(hostname, { allowPrivateDomains: true });
+    // ex: "com", "ro", "co.uk"
+    return res.publicSuffix ?? null;
 }
