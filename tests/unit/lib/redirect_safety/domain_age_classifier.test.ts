@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DomainStatus } from '@/generated/prisma/enums';
 import { Domain } from '@/generated/prisma/client';
-import { classifyDomainAge, isNewDomain } from '@/lib/redirect_safety/domain_age_classifier';
+import { classifyDomainAge, domainAgeRiskFlag, isNewDomain } from '@/lib/redirect_safety/domain_age_classifier';
 import type { DomainAgeClassifierInput } from '@/lib/redirect_safety/redirect_safety_types';
 import { DomainSource } from '@/generated/prisma/enums';
 
@@ -460,5 +460,63 @@ describe('isNewDomain', () => {
         mockGetDaysAgeFrom.mockReturnValue(30);
 
         expect(isNewDomain(errorDomain)).toBe(false);
+    });
+});
+
+describe('domainAgeRiskFlag', () => {
+    const mockGetDaysAgeFrom = vi.mocked(getDaysAgeFrom);
+
+    const baseDomain: Partial<Domain> = {
+        id: 'domain-risk-id',
+        hostname: 'example.com',
+        registeredAt: new Date('2020-01-01T00:00:00.000Z'),
+        status: DomainStatus.OK,
+        checkedAt: new Date('2024-01-15T10:00:00.000Z'),
+        firstSeenAt: new Date('2024-01-01T00:00:00.000Z'),
+        source: DomainSource.RDAP,
+    };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('Returns unknown_domain_age with missing_domain reason when domain is null', () => {
+        expect(domainAgeRiskFlag(null)).toEqual({
+            kind: 'unknown_domain_age',
+            reason: 'missing_domain',
+        });
+        expect(mockGetDaysAgeFrom).not.toHaveBeenCalled();
+    });
+
+    it('Returns new_domain when classification result is New', () => {
+        mockGetDaysAgeFrom
+            .mockReturnValueOnce(10) // checkedAt age
+            .mockReturnValueOnce(5); // registeredAt age
+
+        const result = domainAgeRiskFlag(baseDomain as Domain);
+
+        expect(result).toEqual({ kind: 'new_domain' });
+    });
+
+    it('Returns old_domain when classification result is Old', () => {
+        mockGetDaysAgeFrom
+            .mockReturnValueOnce(10) // checkedAt age
+            .mockReturnValueOnce(120); // registeredAt age
+
+        const result = domainAgeRiskFlag(baseDomain as Domain);
+
+        expect(result).toEqual({ kind: 'old_domain' });
+    });
+
+    it('Returns unknown_domain_age with propagated reason when classification is Unknown', () => {
+        const result = domainAgeRiskFlag({
+            ...baseDomain,
+            checkedAt: null,
+        } as Domain);
+
+        expect(result).toEqual({
+            kind: 'unknown_domain_age',
+            reason: 'no_checked_at',
+        });
     });
 });
