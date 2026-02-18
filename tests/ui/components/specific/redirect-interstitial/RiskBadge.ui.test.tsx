@@ -12,17 +12,23 @@ vi.mock('next/link', () => ({
     ),
 }));
 
-function makeRisk(level: RiskResult['level'], score: number, reasons: RiskResult['reasons'] = []): RiskResult {
-    return { level, score, reasons };
+function makeRisk(
+    level: RiskResult['level'],
+    score: number,
+    severity: RiskResult['severity'] = 'none',
+    reasons: RiskResult['reasons'] = []
+): RiskResult {
+    return { level, severity, score, reasons };
 }
 
 describe('RiskBadge component UI tests', () => {
     it.each([
-        ['low', 'Low Risk'],
+        ['low', 'Verified'],
+        ['no_info', 'Unverified'],
         ['medium', 'Moderate Risk'],
         ['high', 'High Risk'],
     ] as const)('renders outside badge label for %s risk', (level, expectedLabel) => {
-        render(<RiskBadge risk={makeRisk(level, 1)} reasonLabels={[]} />);
+        render(<RiskBadge risk={makeRisk(level, 1, 'low')} reasonLabels={[]} />);
 
         expect(screen.getByText(expectedLabel)).toBeInTheDocument();
     });
@@ -30,7 +36,7 @@ describe('RiskBadge component UI tests', () => {
     it('Opens popover and shows severity, reasons and score details', async () => {
         render(
             <RiskBadge
-                risk={makeRisk('medium', 4, ['shortener', 'suspicious_path'])}
+                risk={makeRisk('medium', 4, 'medium', ['shortener', 'suspicious_path'])}
                 reasonLabels={['Known shortener domain', 'Suspicious URL path']}
             />
         );
@@ -48,7 +54,7 @@ describe('RiskBadge component UI tests', () => {
     });
 
     it('Shows no-suspicious-signals message when no reasons exist', async () => {
-        render(<RiskBadge risk={makeRisk('low', 0)} reasonLabels={[]} />);
+        render(<RiskBadge risk={makeRisk('low', 0, 'none')} reasonLabels={[]} />);
 
         fireEvent.click(screen.getByRole('button', { name: /view risk analysis/i }));
 
@@ -56,7 +62,7 @@ describe('RiskBadge component UI tests', () => {
     });
 
     it('Renders the help link at the bottom of popover', async () => {
-        render(<RiskBadge risk={makeRisk('high', 6)} reasonLabels={['Temporary redirect']} />);
+        render(<RiskBadge risk={makeRisk('high', 6, 'high')} reasonLabels={['Temporary redirect']} />);
 
         fireEvent.click(screen.getByRole('button', { name: /view risk analysis/i }));
 

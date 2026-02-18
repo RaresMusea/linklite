@@ -20,7 +20,6 @@ export type CreatedLinkResponse = {
     shortUrl: string;
 };
 
-<<<<<<< feature/ll-55-design-redirect-loading-page
 export type LinkRedirectData = {
     slug: string;
     targetUrl: string;
@@ -34,14 +33,14 @@ export type LinkRedirectData = {
         registeredAt: Date | null;
         checkedAt: Date | null;
     } | null;
-=======
+};
+
 export type LinkRiskInput = {
     targetUrl: string;
     isShortener: boolean;
     hasRedirect: boolean;
     redirectStatusCode?: number;
     domain?: MinimalDomain | null;
->>>>>>> develop
 };
 
 export function isCreatedLink(x: unknown): x is CreatedLink {

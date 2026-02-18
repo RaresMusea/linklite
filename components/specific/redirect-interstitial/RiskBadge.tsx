@@ -13,10 +13,17 @@ type Props = {
 const LEVEL_CONFIG = {
     low: {
         label: 'Low',
-        badgeLabel: 'Low Risk',
+        badgeLabel: 'Verified',
         classes: 'bg-primary/15 border-primary/30 text-primary',
         dotClass: 'bg-primary/70',
         textClass: 'text-foreground',
+    },
+    no_info: {
+        label: 'No info',
+        badgeLabel: 'Unverified',
+        classes: 'bg-muted/60 border-border text-muted-foreground',
+        dotClass: 'bg-muted-foreground/70',
+        textClass: 'text-muted-foreground',
     },
     medium: {
         label: 'Medium',
@@ -33,6 +40,33 @@ const LEVEL_CONFIG = {
         textClass: 'text-destructive',
     },
 } satisfies Record<RiskResult['level'], object>;
+
+const SEVERITY_CONFIG = {
+    none: {
+        label: 'None',
+        dotClass: 'bg-muted-foreground/50',
+        textClass: 'text-muted-foreground',
+        barClass: 'bg-muted',
+    },
+    low: {
+        label: 'Low',
+        dotClass: 'bg-primary/70',
+        textClass: 'text-foreground',
+        barClass: 'bg-primary',
+    },
+    medium: {
+        label: 'Medium',
+        dotClass: 'bg-yellow-500/80',
+        textClass: 'text-yellow-600 dark:text-yellow-400',
+        barClass: 'bg-yellow-500',
+    },
+    high: {
+        label: 'High',
+        dotClass: 'bg-destructive/80',
+        textClass: 'text-destructive',
+        barClass: 'bg-destructive',
+    },
+} satisfies Record<RiskResult['severity'], object>;
 
 const MAX_REASONS_DISPLAYED = 6;
 
@@ -61,7 +95,8 @@ function RiskReasons({ reasonLabels }: { reasonLabels: string[] }) {
 }
 
 export default function RiskBadge({ risk, reasonLabels }: Props) {
-    const config = LEVEL_CONFIG[risk.level];
+    const levelCfg = LEVEL_CONFIG[risk.level];
+    const sevCfg = SEVERITY_CONFIG[risk.severity];
 
     return (
         <Popover>
@@ -69,10 +104,10 @@ export default function RiskBadge({ risk, reasonLabels }: Props) {
                 <button
                     type="button"
                     aria-label="View risk analysis"
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition shrink-0 ${config.classes}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition shrink-0 ${levelCfg.classes}`}
                 >
                     <Shield className="w-3.5 h-3.5" />
-                    <span className="text-xs font-medium">{config.badgeLabel}</span>
+                    <span className="text-xs font-medium">{levelCfg.badgeLabel}</span>
                 </button>
             </PopoverTrigger>
 
@@ -80,7 +115,9 @@ export default function RiskBadge({ risk, reasonLabels }: Props) {
                 align="end"
                 className="w-80 overflow-hidden rounded-xl border-border/60 bg-popover/95 p-0 shadow-xl shadow-primary/10 backdrop-blur-xl"
             >
-                <div className="h-1 w-full bg-primary" />
+                {/* top bar should reflect severity, not level */}
+                <div className={`h-1 w-full ${sevCfg.barClass}`} />
+
                 <div className="space-y-4 p-4">
                     {/* Header */}
                     <div className="flex items-center justify-between gap-3">
@@ -93,11 +130,13 @@ export default function RiskBadge({ risk, reasonLabels }: Props) {
                                 <p className="text-xs text-muted-foreground">Automated redirection security checks</p>
                             </div>
                         </div>
+
+                        {/* Severity card uses severity */}
                         <div className="rounded-lg border border-border/60 bg-card/70 px-2.5 py-1.5">
                             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Severity</p>
-                            <p className={`mt-0.5 flex items-center gap-1.5 text-xs font-semibold ${config.textClass}`}>
-                                <span className={`h-1.5 w-1.5 rounded-full ${config.dotClass}`} />
-                                {config.label}
+                            <p className={`mt-0.5 flex items-center gap-1.5 text-xs font-semibold ${sevCfg.textClass}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${sevCfg.dotClass}`} />
+                                {sevCfg.label}
                             </p>
                         </div>
                     </div>
