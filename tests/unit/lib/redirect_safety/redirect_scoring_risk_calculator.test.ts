@@ -44,10 +44,10 @@ describe('riskLevelFromScore', () => {
         expect(riskLevelFromScore(4.999)).toBe('medium');
     });
 
-    it('Returns low for scores below 3', () => {
-        expect(riskLevelFromScore(2.999)).toBe('low');
-        expect(riskLevelFromScore(0)).toBe('low');
-        expect(riskLevelFromScore(-1)).toBe('low');
+    it('Returns no_info for scores below 3', () => {
+        expect(riskLevelFromScore(2.999)).toBe('no_info');
+        expect(riskLevelFromScore(0)).toBe('no_info');
+        expect(riskLevelFromScore(-1)).toBe('no_info');
     });
 });
 
@@ -87,11 +87,12 @@ describe('calculateRedirectRiskScoring', () => {
     it('Returns low risk with score 0 when no signals are present', () => {
         const result = calculateRedirectRiskScoring(baseInput);
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             level: 'low',
             score: 0,
             reasons: [],
         });
+        expect(result.debug?.ctx).toBeDefined();
     });
 
     it('Adds missing_tld when domain is absent and skips domain-based checks', () => {
@@ -100,8 +101,8 @@ describe('calculateRedirectRiskScoring', () => {
             domain: null,
         });
 
-        expect(result).toEqual({
-            level: 'low',
+        expect(result).toMatchObject({
+            level: 'no_info',
             score: 1,
             reasons: ['missing_tld'],
         });
@@ -109,7 +110,7 @@ describe('calculateRedirectRiskScoring', () => {
         expect(mockHasLowTrustTld).not.toHaveBeenCalled();
         expect(mockIsNonAllowlistedTld).not.toHaveBeenCalled();
         expect(mockIsNewDomain).not.toHaveBeenCalled();
-        expect(mockIsAllowlisted).not.toHaveBeenCalled();
+        expect(mockIsAllowlisted).toHaveBeenCalledWith(baseInput.targetUrl);
     });
 
     it('Applies and orders all non-domain reasons correctly', () => {
@@ -124,7 +125,7 @@ describe('calculateRedirectRiskScoring', () => {
             domain: null,
         });
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             level: 'high',
             score: 8,
             reasons: ['not_https', 'shortener', 'suspicious_path', 'temporary_redirect', 'missing_tld'],
@@ -184,8 +185,8 @@ describe('calculateRedirectRiskScoring', () => {
 
         const result = calculateRedirectRiskScoring(baseInput);
 
-        expect(result).toEqual({
-            level: 'low',
+        expect(result).toMatchObject({
+            level: 'no_info',
             score: 2,
             reasons: ['domain_new', 'domain_not_allowlisted'],
         });
@@ -197,11 +198,33 @@ describe('calculateRedirectRiskScoring', () => {
 
         const result = calculateRedirectRiskScoring(baseInput);
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             level: 'medium',
             score: 3,
             reasons: ['suspicious_path', 'domain_not_allowlisted'],
         });
+    });
+
+    it('Forces high when low-trust TLD and new domain are both present', () => {
+        mockHasLowTrustTld.mockReturnValue(true); // +1
+        mockIsNewDomain.mockReturnValue(true); // +1
+
+        const result = calculateRedirectRiskScoring(baseInput);
+
+        expect(result.score).toBe(2);
+        expect(result.reasons).toEqual(['tld_low_trust', 'domain_new']);
+        expect(result.level).toBe('high');
+    });
+
+    it('Forces high when not HTTPS and suspicious path are both present', () => {
+        mockIsHttps.mockReturnValue(false); // +1
+        mockHasSuspiciousPath.mockReturnValue(true); // +2
+
+        const result = calculateRedirectRiskScoring(baseInput);
+
+        expect(result.score).toBe(3);
+        expect(result.reasons).toEqual(['not_https', 'suspicious_path']);
+        expect(result.level).toBe('high');
     });
 
     it('Passes domain hostname override into suspicious path checker', () => {
