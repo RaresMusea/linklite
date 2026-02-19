@@ -68,6 +68,6 @@ describe('RiskBadge component UI tests', () => {
 
         const link = await screen.findByRole('link', { name: /How do we calculate the risk scoring\?/i });
         expect(link).toBeInTheDocument();
-        expect(link).toHaveAttribute('href', '/terms');
+        expect(link).toHaveAttribute('href', '/risk-scoring');
     });
 });
