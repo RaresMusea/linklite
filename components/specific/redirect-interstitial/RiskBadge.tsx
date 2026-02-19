@@ -153,7 +153,7 @@ export default function RiskBadge({ risk, reasonLabels, onOpenChangeAction }: Pr
                     {/* Footer */}
                     <div className="border-t border-border/60 pt-2 text-center">
                         <Link
-                            href="/terms"
+                            href="/risk-scoring"
                             className="text-xs text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground transition-colors"
                         >
                             How do we calculate the risk scoring?
