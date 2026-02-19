@@ -119,4 +119,55 @@ describe('RedirectInterstitial pause/resume UI tests', () => {
         expect(scaleAfterResume).toBeGreaterThan(scaleBeforePause);
         expect(percentAfterResume).toBeGreaterThan(percentBefore);
     });
+
+    it('Shows fallback link after timeout when auto redirect is enabled', async () => {
+        const { container } = render(
+            <RedirectInterstitial
+                slug="abc"
+                targetUrl="https://example.com"
+                hostname="example.com"
+                riskScore={makeRisk('low')}
+            />
+        );
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(600);
+        });
+
+        const fallback = container.querySelector('a.redirect-fallback');
+        expect(fallback).toBeInTheDocument();
+        expect(fallback).not.toHaveClass('is-visible');
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(10_000);
+        });
+
+        expect(fallback).toHaveClass('is-visible');
+    });
+
+    it('Does not show fallback link when auto redirect is disabled', async () => {
+        const { container } = render(
+            <RedirectInterstitial
+                slug="abc"
+                targetUrl="https://example.com"
+                hostname="example.com"
+                riskScore={makeRisk('medium')}
+            />
+        );
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(600);
+        });
+
+        const fallback = container.querySelector('a.redirect-fallback');
+        expect(fallback).toBeInTheDocument();
+        expect(fallback).not.toHaveClass('is-visible');
+        expect(screen.getByText(/auto-redirect is disabled/i)).toBeInTheDocument();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(20_000);
+        });
+
+        expect(fallback).not.toHaveClass('is-visible');
+    });
 });

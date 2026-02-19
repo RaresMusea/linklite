@@ -14,7 +14,7 @@ describe('useRedirectPhase', () => {
         vi.restoreAllMocks();
     });
 
-    it('advances intro phases from skeleton to card to progress', async () => {
+    it('Advances intro phases from skeleton to card to progress', async () => {
         vi.stubGlobal('requestAnimationFrame', () => 1);
         vi.stubGlobal('cancelAnimationFrame', () => undefined);
 
@@ -33,7 +33,7 @@ describe('useRedirectPhase', () => {
         expect(result.current.phase).toBe('progress');
     });
 
-    it('reaches ready with progress locked at 100 and countdown at 0 when auto-delay is enabled', async () => {
+    it('Reaches ready with progress locked at 100 and countdown at 0 when auto-delay is enabled', async () => {
         vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
             cb(10_000);
             return 1;
@@ -51,7 +51,7 @@ describe('useRedirectPhase', () => {
         expect(result.current.secondsLeft).toBe(0);
     });
 
-    it('keeps secondsLeft null when auto-delay is disabled', async () => {
+    it('Keeps secondsLeft null when auto-delay is disabled', async () => {
         vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
             cb(10_000);
             return 1;
@@ -69,7 +69,7 @@ describe('useRedirectPhase', () => {
         expect(result.current.secondsLeft).toBeNull();
     });
 
-    it('auto-redirects when ready and auto-redirect is enabled', async () => {
+    it('Auto-redirects when ready and auto-redirect is enabled', async () => {
         vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
             cb(10_000);
             return 1;
@@ -88,7 +88,7 @@ describe('useRedirectPhase', () => {
         expect(zeroDelayCalls.length).toBeGreaterThan(0);
     });
 
-    it('does not auto-redirect when auto-redirect is disabled', async () => {
+    it('Does not auto-redirect when auto-redirect is disabled', async () => {
         vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
             cb(10_000);
             return 1;
@@ -105,5 +105,46 @@ describe('useRedirectPhase', () => {
 
         const zeroDelayCalls = setTimeoutSpy.mock.calls.filter(([, delay]) => delay === 0);
         expect(zeroDelayCalls.length).toBe(0);
+    });
+
+    it('Keeps fallback hidden before fallback timeout', async () => {
+        vi.stubGlobal('requestAnimationFrame', () => 1);
+        vi.stubGlobal('cancelAnimationFrame', () => undefined);
+
+        const { result } = renderHook(() => useRedirectPhase(2000, 'https://example.com/path', true));
+
+        expect(result.current.showFallback).toBe(false);
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(9_999);
+        });
+
+        expect(result.current.showFallback).toBe(false);
+    });
+
+    it('Shows fallback after fallback timeout when auto-redirect is enabled', async () => {
+        vi.stubGlobal('requestAnimationFrame', () => 1);
+        vi.stubGlobal('cancelAnimationFrame', () => undefined);
+
+        const { result } = renderHook(() => useRedirectPhase(2000, 'https://example.com/path', true));
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(10_000);
+        });
+
+        expect(result.current.showFallback).toBe(true);
+    });
+
+    it('Does not show fallback when auto-redirect is disabled', async () => {
+        vi.stubGlobal('requestAnimationFrame', () => 1);
+        vi.stubGlobal('cancelAnimationFrame', () => undefined);
+
+        const { result } = renderHook(() => useRedirectPhase(2000, 'https://example.com/path', false));
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(10_000);
+        });
+
+        expect(result.current.showFallback).toBe(false);
     });
 });
