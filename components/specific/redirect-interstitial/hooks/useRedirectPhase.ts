@@ -8,10 +8,10 @@ export function useRedirectPhase(
     autoEnabled: boolean,
     countdownPaused = false
 ) {
-
     const [phase, setPhase] = useState<Phase>('skeleton');
     const [progress, setProgress] = useState(0);
     const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+    const [showFallback, setShowFallback] = useState(false);
     const elapsedMsRef = useRef(0);
 
     useEffect(() => {
@@ -89,5 +89,20 @@ export function useRedirectPhase(
         return () => clearTimeout(t);
     }, [phase, autoEnabled, targetUrl]);
 
-    return { phase, progress, secondsLeft };
+    // 4. Show fallback link if redirect does not happen in time
+    useEffect(() => {
+        if (!autoEnabled) return;
+        if (!targetUrl) return;
+
+        const delay = 10_000; // or spec: > 10 seconds
+        const t = window.setTimeout(() => {
+            setShowFallback(true);
+        }, delay);
+
+        return () => {
+            clearTimeout(t);
+        };
+    }, [autoEnabled, targetUrl]);
+
+    return { phase, progress, secondsLeft, showFallback };
 }
