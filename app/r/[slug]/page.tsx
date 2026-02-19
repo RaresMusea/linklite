@@ -21,13 +21,11 @@ export default async function RedirectPage({ params }: Props) {
     const riskScore: RiskResult = calculateRedirectRiskScoring(mapped);
 
     return (
-        <>
-            <RedirectInterstitial
-                slug={slug}
-                targetUrl={mapped.targetUrl}
-                hostname={mapped.domain?.hostname}
-                riskScore={riskScore}
-            />
-        </>
+        <RedirectInterstitial
+            slug={slug}
+            targetUrl={mapped.targetUrl}
+            hostname={mapped.domain?.hostname}
+            riskScore={riskScore}
+        />
     );
 }
