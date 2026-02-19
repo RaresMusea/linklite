@@ -74,7 +74,7 @@ export default function RedirectInterstitial(props: RedirectInterstitialProps) {
 
     return (
         <>
-            <div className="min-h-screen bg-background text-foreground flex items-center justify-center overflow-hidden relative">
+            <div className="min-h-screen -mb-8 bg-background text-foreground flex items-center justify-center overflow-hidden relative">
                 {/* Background */}
                 <div className="absolute inset-0 overflow-hidden">
                     <div className="absolute inset-0 bg-linear-to-br from-primary/10 via-background to-accent/15" />
