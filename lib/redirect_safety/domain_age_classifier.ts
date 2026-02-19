@@ -1,7 +1,12 @@
-import { DomainAgeClassifierInput, DomainAgeResult } from '@/lib/redirect_safety/redirect_safety_types';
+import {
+    DomainAgeClassifierInput,
+    DomainAgeResult,
+    DomainAgeRiskFlag,
+} from '@/lib/redirect_safety/redirect_safety_types';
 import { getDaysAgeFrom } from '@/lib/dates';
 import { DomainStatus } from '@/generated/prisma/enums';
 import { Domain } from '@/generated/prisma/client';
+import { MinimalDomain } from '@/dal/domains/domains.types';
 
 const NEW_DOMAIN_DAYS_DEFAULT = 30;
 const MAX_CHECKED_AGE_DAYS_DEFAULT = 45;
@@ -63,7 +68,25 @@ export function classifyDomainAge(input: DomainAgeClassifierInput): DomainAgeRes
     };
 }
 
-export function isNewDomain(domain: Domain | null): boolean {
+export function domainAgeRiskFlag(domain: Domain | null): DomainAgeRiskFlag {
+    if (!domain) return { kind: 'unknown_domain_age', reason: 'missing_domain' };
+
+    const res = classifyDomainAge(fromDomainToClassifierInput(domain));
+
+    if (res.age === 'New') return { kind: 'new_domain' };
+    if (res.age === 'Old') return { kind: 'old_domain' };
+    return { kind: 'unknown_domain_age', reason: res.reason };
+}
+
+export function isNewDomain(domain: MinimalDomain | null, options = {}): boolean {
     if (!domain) return false;
-    return classifyDomainAge(fromDomainToClassifierInput(domain)).age === 'New';
+
+    return (
+        classifyDomainAge({
+            registeredAt: domain.registeredAt,
+            status: domain.status,
+            checkedAt: domain.checkedAt,
+            options,
+        }).age === 'New'
+    );
 }

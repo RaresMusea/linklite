@@ -1,4 +1,5 @@
 import { DomainStatus } from '@/generated/prisma/enums';
+import { RiskReason } from '@/lib/redirect_safety/redirect_scoring_risk_calculator';
 
 export type DomainAge = 'Old' | 'New' | 'Unknown';
 
@@ -36,3 +37,28 @@ export type RedirectProbeResult =
           targetUrl: string;
           targetHost: string;
       };
+
+export type DomainAgeRiskFlag =
+    | { kind: 'new_domain' }
+    | { kind: 'old_domain' }
+    | { kind: 'unknown_domain_age'; reason?: string };
+
+export type RiskContext = {
+    url: string;
+    hostname?: string;
+    hasDomain: boolean;
+    isHttps: boolean;
+    isShortener: boolean;
+    hasRedirect302: boolean;
+    suspiciousPath: boolean;
+    lowTrustTld: boolean;
+    unknownTld: boolean;
+    newDomain: boolean;
+    allowlisted: boolean;
+};
+
+export type RiskSignal = {
+    id: RiskReason;
+    points: number;
+    when: boolean;
+};

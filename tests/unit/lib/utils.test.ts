@@ -2,9 +2,11 @@ import { describe, beforeEach, it, vi, expect } from 'vitest';
 import {
     cn,
     generateSlug,
+    getPublicSuffix,
     getRegistrableDomain,
     getTld,
     isApiRouteResponseOf,
+    isHttps,
     normalizeHostnameFromUrl,
 } from '@/lib/utils';
 import { toASCII } from 'punycode';
@@ -607,5 +609,74 @@ describe('Registrable domain retrieval', () => {
 
     it('returns entire string when 1 part', () => {
         expect(getRegistrableDomain('single')).toBeNull();
+    });
+});
+
+describe('Public suffix retrieval', () => {
+    it('returns suffix for common TLD', () => {
+        expect(getPublicSuffix('example.com')).toBe('com');
+        expect(getPublicSuffix('www.example.com')).toBe('com');
+    });
+
+    it('returns multi-level public suffixes', () => {
+        expect(getPublicSuffix('example.co.uk')).toBe('co.uk');
+        expect(getPublicSuffix('deep.example.com.au')).toBe('com.au');
+    });
+
+    it('returns private suffixes when allowPrivateDomains is enabled', () => {
+        expect(getPublicSuffix('foo.blogspot.com')).toBe('blogspot.com');
+        expect(getPublicSuffix('www.s3.amazonaws.com')).toBe('s3.amazonaws.com');
+    });
+
+    it('handles internationalized and punycode hostnames', () => {
+        expect(getPublicSuffix('münchen.de')).toBe('de');
+        expect(getPublicSuffix('xn--mnchen-3ya.de')).toBe('de');
+    });
+
+    it('handles trailing dot by normalizing suffix', () => {
+        expect(getPublicSuffix('example.com.')).toBe('com');
+        expect(getPublicSuffix('www.example.co.uk.')).toBe('co.uk');
+    });
+
+    it('returns null for IP addresses and empty input', () => {
+        expect(getPublicSuffix('192.168.1.1')).toBeNull();
+        expect(getPublicSuffix('2001:db8::1')).toBeNull();
+        expect(getPublicSuffix('')).toBeNull();
+    });
+
+    it('returns null for malformed hostnames with repeated dots', () => {
+        expect(getPublicSuffix('example..com')).toBeNull();
+        expect(getPublicSuffix('www..example..com')).toBeNull();
+    });
+
+    it('returns localhost suffix for localhost-style hosts', () => {
+        expect(getPublicSuffix('localhost')).toBe('localhost');
+        expect(getPublicSuffix('example.localhost')).toBe('localhost');
+    });
+
+    it('returns single-label input as its own suffix', () => {
+        expect(getPublicSuffix('example')).toBe('example');
+    });
+
+    it('normalizes case in the returned suffix', () => {
+        expect(getPublicSuffix('WWW.Example.Co.UK')).toBe('co.uk');
+    });
+});
+
+describe('isHttps', () => {
+    it('returns true for valid HTTPS URLs', () => {
+        expect(isHttps('https://example.com')).toBe(true);
+        expect(isHttps('HTTPS://example.com/path?x=1#a')).toBe(true);
+    });
+
+    it('returns false for non-HTTPS but valid URLs', () => {
+        expect(isHttps('http://example.com')).toBe(false);
+        expect(isHttps('ftp://example.com/resource')).toBe(false);
+    });
+
+    it('returns false for malformed or non-URL input', () => {
+        expect(isHttps('not-a-url')).toBe(false);
+        expect(isHttps('')).toBe(false);
+        expect(isHttps('https://')).toBe(false);
     });
 });
