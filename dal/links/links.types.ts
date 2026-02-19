@@ -20,6 +20,21 @@ export type CreatedLinkResponse = {
     shortUrl: string;
 };
 
+export type LinkRedirectData = {
+    slug: string;
+    targetUrl: string;
+    isShortener: boolean | null;
+    redirectTargetUrl: string | null;
+    redirectStatusCode: number | null;
+    redirectCheckedAt: Date | null;
+    domain: {
+        hostname: string;
+        status: string;
+        registeredAt: Date | null;
+        checkedAt: Date | null;
+    } | null;
+};
+
 export type LinkRiskInput = {
     targetUrl: string;
     isShortener: boolean;

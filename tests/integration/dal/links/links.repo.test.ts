@@ -1,6 +1,6 @@
 import { beforeEach, describe, it, expect, vi, Mock } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { applyRedirectProbeResult, createLink, increaseClickCount } from '@/dal/links/links.repo';
+import { applyRedirectProbeResult, createLink, findLinkForRedirect, increaseClickCount } from '@/dal/links/links.repo';
 import { normalizeHostnameFromUrl } from '@/lib/utils';
 import { upsertDomainEnrichmentJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
 import { upsertLinkEnrichmentJob } from '@/dal/link_enrichment_jobs/link_enrichment_jobs.repo';
@@ -767,6 +767,105 @@ describe('Link Repository - Integration Tests', () => {
             expect(updated?.redirectTargetUrl).toBeNull();
             expect(updated?.redirectStatusCode).toBeNull();
             expect(updated?.redirectCheckedAt).toBeInstanceOf(Date);
+        });
+    });
+
+    describe('findLinkForRedirect', () => {
+        it('Should Return Null when slug does not exist', async () => {
+            const result = await findLinkForRedirect('missing-slug');
+
+            expect(result).toBeNull();
+        });
+
+        it('Should Return redirect data with default enrichment fields', async () => {
+            (normalizeHostnameFromUrl as Mock).mockReturnValue('example.com');
+
+            const created = await createLink({
+                slug: 'find-default',
+                targetUrl: 'https://example.com/page',
+                ownerId: null,
+            });
+
+            const result = await findLinkForRedirect(created.slug);
+
+            expect(result).not.toBeNull();
+            expect(result?.slug).toBe('find-default');
+            expect(result?.targetUrl).toBe('https://example.com/page');
+            expect(result?.isShortener).toBeNull();
+            expect(result?.redirectTargetUrl).toBeNull();
+            expect(result?.redirectStatusCode).toBeNull();
+            expect(result?.redirectCheckedAt).toBeNull();
+            expect(result?.domain).not.toBeNull();
+            expect(result?.domain?.hostname).toBe('example.com');
+            expect(result?.domain?.status).toBe('UNKNOWN');
+            expect(result?.domain?.registeredAt).toBeNull();
+            expect(result?.domain?.checkedAt).toBeNull();
+            expect(result).not.toHaveProperty('ownerId');
+            expect(result).not.toHaveProperty('clicks');
+            expect(result).not.toHaveProperty('createdAt');
+        });
+
+        it('Should Return redirect and domain enrichment values when present', async () => {
+            (normalizeHostnameFromUrl as Mock).mockReturnValue('example.com');
+
+            const created = await createLink({
+                slug: 'find-enriched',
+                targetUrl: 'https://example.com',
+                ownerId: null,
+            });
+
+            const checkedAt = new Date('2026-02-10T12:00:00.000Z');
+            const registeredAt = new Date('2020-01-15T00:00:00.000Z');
+            const redirectCheckedAt = new Date('2026-02-10T12:30:00.000Z');
+
+            await prisma.domain.update({
+                where: { id: created.domainId! },
+                data: {
+                    status: 'OK',
+                    checkedAt,
+                    registeredAt,
+                },
+            });
+
+            await prisma.link.update({
+                where: { id: created.id },
+                data: {
+                    isShortener: true,
+                    redirectTargetUrl: 'https://target.example/path',
+                    redirectStatusCode: 302,
+                    redirectCheckedAt,
+                },
+            });
+
+            const result = await findLinkForRedirect(created.slug);
+
+            expect(result).not.toBeNull();
+            expect(result?.isShortener).toBe(true);
+            expect(result?.redirectTargetUrl).toBe('https://target.example/path');
+            expect(result?.redirectStatusCode).toBe(302);
+            expect(result?.redirectCheckedAt).toEqual(redirectCheckedAt);
+            expect(result?.domain).not.toBeNull();
+            expect(result?.domain?.hostname).toBe('example.com');
+            expect(result?.domain?.status).toBe('OK');
+            expect(result?.domain?.registeredAt).toEqual(registeredAt);
+            expect(result?.domain?.checkedAt).toEqual(checkedAt);
+        });
+
+        it('Should Return null domain for links without a domain relation', async () => {
+            await prisma.link.create({
+                data: {
+                    slug: 'find-no-domain',
+                    targetUrl: 'https://no-domain.example',
+                    ownerId: null,
+                },
+            });
+
+            const result = await findLinkForRedirect('find-no-domain');
+
+            expect(result).not.toBeNull();
+            expect(result?.slug).toBe('find-no-domain');
+            expect(result?.targetUrl).toBe('https://no-domain.example');
+            expect(result?.domain).toBeNull();
         });
     });
 });

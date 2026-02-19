@@ -7,7 +7,7 @@ export const RISK_REASON_LABEL: Record<RiskReason, string> = {
     missing_tld: 'Domain information unavailable',
     tld_unknown: 'Uncommon or unrecognized top-level domain',
     tld_low_trust: 'Low-trust top-level domain',
-    domain_not_allowlisted: 'Domain not in trusted allowlist',
+    domain_not_allowlisted: 'Domain not found within our trusted allowlist',
     temporary_redirect: 'URL uses temporary redirect',
     domain_new: 'Domain registered recently',
 };
