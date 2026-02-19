@@ -192,19 +192,35 @@
 }
 
 .redirect-fallback {
-    position: fixed;
-    left: 50%;
-    bottom: 24px;
-    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 6px;
+    text-align: center;
+    transform: translateY(8px) scale(0.98);
     font-size: 14px;
     text-decoration: underline;
+    text-underline-offset: 3px;
+    color: var(--muted-foreground);
     opacity: 0;
     pointer-events: none;
-    transition: opacity .2s ease;
-    z-index: 50;
+    transition: opacity 0.2s ease, color 0.2s ease, transform 0.25s ease;
+}
+
+.redirect-fallback:link,
+.redirect-fallback:visited {
+    color: var(--muted-foreground);
 }
 
 .redirect-fallback.is-visible {
     opacity: 1;
     pointer-events: auto;
+    transform: translateY(0) scale(1);
+    animation: fade-in 0.35s ease-out both;
+}
+
+.redirect-fallback:hover,
+.redirect-fallback:focus-visible,
+.redirect-fallback:active {
+    color: var(--primary);
 }
