@@ -8,6 +8,7 @@ import Link from 'next/link';
 type Props = {
     risk: RiskResult;
     reasonLabels: string[];
+    onOpenChangeAction?: (open: boolean) => void;
 };
 
 const LEVEL_CONFIG = {
@@ -94,12 +95,12 @@ function RiskReasons({ reasonLabels }: { reasonLabels: string[] }) {
     );
 }
 
-export default function RiskBadge({ risk, reasonLabels }: Props) {
+export default function RiskBadge({ risk, reasonLabels, onOpenChangeAction }: Props) {
     const levelCfg = LEVEL_CONFIG[risk.level];
     const sevCfg = SEVERITY_CONFIG[risk.severity];
 
     return (
-        <Popover>
+        <Popover onOpenChange={onOpenChangeAction}>
             <PopoverTrigger asChild>
                 <button
                     type="button"
