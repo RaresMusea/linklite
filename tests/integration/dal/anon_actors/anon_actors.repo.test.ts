@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { upsertAnonActor } from '@/dal/anon_actors/anon_actors.repo';
+import { incrementAnonActorQuotaCountTx, upsertAnonActor } from '@/dal/anon_actors/anon_actors.repo';
 import { prisma } from '@/lib/prisma';
 import { resetDb } from '@/tests/helpers/db';
 
@@ -62,6 +62,65 @@ describe('Anon Actors Repository Integration Tests', () => {
             });
 
             expect(actors).toHaveLength(1);
+        });
+    });
+
+    describe('Increment anonymous quota count (transactional)', () => {
+        it('Should increment createdCount and return true when under limit', async () => {
+            await upsertAnonActor('anon-quota-ok', 'hash-1');
+
+            const succeeded = await prisma.$transaction((tx) => incrementAnonActorQuotaCountTx('anon-quota-ok', 2, tx));
+
+            expect(succeeded).toBe(true);
+
+            const actor = await prisma.anonActor.findUnique({
+                where: { anonId: 'anon-quota-ok' },
+            });
+            expect(actor?.createdCount).toBe(1);
+        });
+
+        it('Should return false and not increment when actor is already at limit', async () => {
+            await prisma.anonActor.create({
+                data: {
+                    anonId: 'anon-quota-maxed',
+                    createdCount: 1,
+                },
+            });
+
+            const succeeded = await prisma.$transaction((tx) =>
+                incrementAnonActorQuotaCountTx('anon-quota-maxed', 1, tx),
+            );
+
+            expect(succeeded).toBe(false);
+
+            const actor = await prisma.anonActor.findUnique({
+                where: { anonId: 'anon-quota-maxed' },
+            });
+            expect(actor?.createdCount).toBe(1);
+        });
+
+        it('Should return false when actor does not exist', async () => {
+            const succeeded = await prisma.$transaction((tx) => incrementAnonActorQuotaCountTx('missing-actor', 3, tx));
+
+            expect(succeeded).toBe(false);
+            expect(await prisma.anonActor.count()).toBe(0);
+        });
+
+        it('Should roll back increment when outer transaction fails', async () => {
+            await upsertAnonActor('anon-tx-rollback', 'hash-1');
+
+            await expect(
+                prisma.$transaction(async (tx) => {
+                    const succeeded = await incrementAnonActorQuotaCountTx('anon-tx-rollback', 5, tx);
+                    expect(succeeded).toBe(true);
+                    throw new Error('force rollback');
+                }),
+            ).rejects.toThrow('force rollback');
+
+            const actor = await prisma.anonActor.findUnique({
+                where: { anonId: 'anon-tx-rollback' },
+            });
+            expect(actor?.createdCount).toBe(0);
         });
     });
 });

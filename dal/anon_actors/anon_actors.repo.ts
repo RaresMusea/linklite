@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@/generated/prisma/client';
 
 export async function upsertAnonActor(anonId: string, ipHash: string | null) {
     return prisma.anonActor.upsert({
@@ -13,4 +14,17 @@ export async function upsertAnonActor(anonId: string, ipHash: string | null) {
             lastIpAddrHash: ipHash ?? undefined,
         },
     });
+}
+
+export async function incrementAnonActorQuotaCountTx(
+    anonId: string,
+    limit: number,
+    tx: Prisma.TransactionClient
+): Promise<boolean> {
+    const res = await tx.anonActor.updateMany({
+        where: { anonId, createdCount: { lt: limit } },
+        data: { createdCount: { increment: 1 } },
+    });
+
+    return res.count === 1;
 }
