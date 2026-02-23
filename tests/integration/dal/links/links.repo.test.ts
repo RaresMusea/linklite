@@ -1,6 +1,12 @@
 import { beforeEach, describe, it, expect, vi, Mock } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { applyRedirectProbeResult, createLink, findLinkForRedirect, increaseClickCount } from '@/dal/links/links.repo';
+import {
+    applyRedirectProbeResult,
+    createLink,
+    createLinkTx,
+    findLinkForRedirect,
+    increaseClickCount,
+} from '@/dal/links/links.repo';
 import { normalizeHostnameFromUrl } from '@/lib/utils';
 import { upsertDomainEnrichmentJob } from '@/dal/domain_enrichment_jobs/domain_enrichment_jobs.repo';
 import { upsertLinkEnrichmentJob } from '@/dal/link_enrichment_jobs/link_enrichment_jobs.repo';
@@ -603,7 +609,76 @@ describe('Link Repository - Integration Tests', () => {
             });
         });
 
-    describe('increaseClickCount', () => {
+        describe('createLinkTx', () => {
+            it('Should create a link and domain within an existing transaction', async () => {
+                (normalizeHostnameFromUrl as Mock).mockReturnValue('tx-example.com');
+
+                const result = await prisma.$transaction((tx) =>
+                    createLinkTx(tx, {
+                        slug: 'tx-create',
+                        targetUrl: 'https://tx-example.com/path',
+                        ownerId: null,
+                    })
+                );
+
+                expect(result.slug).toBe('tx-create');
+                expect(result.targetUrl).toBe('https://tx-example.com/path');
+                expect(result.domainId).toBeDefined();
+
+                const persisted = await prisma.link.findUnique({
+                    where: { slug: 'tx-create' },
+                    include: { domain: true },
+                });
+
+                expect(persisted).toBeDefined();
+                expect(persisted?.domain?.hostname).toBe('tx-example.com');
+                expect(upsertDomainEnrichmentJob).not.toHaveBeenCalled();
+                expect(upsertLinkEnrichmentJob).not.toHaveBeenCalled();
+            });
+
+            it('Should throw InvalidHostnameError when hostname normalization fails', async () => {
+                (normalizeHostnameFromUrl as Mock).mockReturnValue(null);
+
+                await expect(
+                    prisma.$transaction((tx) =>
+                        createLinkTx(tx, {
+                            slug: 'tx-invalid-host',
+                            targetUrl: 'invalid-url',
+                            ownerId: null,
+                        })
+                    )
+                ).rejects.toThrow(InvalidHostnameError);
+
+                const links = await prisma.link.count();
+                const domains = await prisma.domain.count();
+                expect(links).toBe(0);
+                expect(domains).toBe(0);
+            });
+
+            it('Should roll back created records when outer transaction fails', async () => {
+                (normalizeHostnameFromUrl as Mock).mockReturnValue('rollback-example.com');
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await createLinkTx(tx, {
+                            slug: 'tx-rollback',
+                            targetUrl: 'https://rollback-example.com',
+                            ownerId: null,
+                        });
+                        throw new Error('force rollback');
+                    })
+                ).rejects.toThrow('force rollback');
+
+                const link = await prisma.link.findUnique({ where: { slug: 'tx-rollback' } });
+                const domain = await prisma.domain.findFirst({
+                    where: { hostname: 'rollback-example.com' },
+                });
+                expect(link).toBeNull();
+                expect(domain).toBeNull();
+            });
+        });
+
+        describe('increaseClickCount', () => {
             beforeEach(async () => {
                 vi.mocked(normalizeHostnameFromUrl).mockReturnValue('example.com');
             });

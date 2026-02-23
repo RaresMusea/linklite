@@ -80,18 +80,43 @@ describe('Link Enrichment Jobs Repository Integration Tests', () => {
             expect(job?.lastError).toBe('previous failure');
         });
 
-        it('Should handle concurrent upserts', async () => {
-            const promises = Array(5)
-                .fill(null)
-                .map(() => upsertLinkEnrichmentJob(testLinkId));
+        it('Should handle concurrent upserts and keep update semantics', async () => {
+            // Arrange
+            vi.useFakeTimers();
+            const now = new Date('2024-01-01T10:00:00Z');
+            vi.setSystemTime(now);
 
-            await Promise.all(promises);
+            await prisma.linkEnrichmentJob.create({
+                data: {
+                    linkId: testLinkId,
+                    status: LinkEnrichmentJobStatus.ERROR,
+                    runAfter: new Date('2023-12-31T10:00:00Z'),
+                    lockedUntil: new Date('2024-01-01T11:00:00Z'),
+                    attempts: 3,
+                    lastError: 'previous failure',
+                },
+            });
 
+            // Act
+            await Promise.all(
+                Array(5)
+                    .fill(null)
+                    .map(() => upsertLinkEnrichmentJob(testLinkId)),
+            );
+
+            // Assert
             const jobs = await prisma.linkEnrichmentJob.findMany({
                 where: { linkId: testLinkId },
             });
 
             expect(jobs).toHaveLength(1);
+
+            const job = jobs[0];
+            expect(job.status).toBe(LinkEnrichmentJobStatus.PENDING);
+            expect(job.runAfter.getTime()).toBe(now.getTime());
+            expect(job.lockedUntil).toBeNull();
+            expect(job.attempts).toBe(3);
+            expect(job.lastError).toBe('previous failure');
         });
     });
 

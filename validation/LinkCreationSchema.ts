@@ -27,7 +27,7 @@ export const LinkCreationSchema = z
             if (url.hostname === 'localhost' || url.hostname.endsWith('.localhost')) {
                 ctx.addIssue({
                     code: 'custom',
-                    message: 'Localhost URLs are not allowed',
+                    message: 'Localhost URLs are not allowed!',
                 });
             }
         }),

@@ -224,3 +224,12 @@
 .redirect-fallback:active {
     color: var(--primary);
 }
+
+@media (max-width: 767px) {
+    .quota-toast,
+    .quota-toast:hover,
+    .quota-toast:focus-within {
+        transform: translateX(-50%) !important;
+        transition: none !important;
+    }
+}

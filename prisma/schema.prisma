@@ -124,3 +124,17 @@ model LinkEnrichmentJob {
   @@index([lockedUntil])
   @@index([status, runAfter])
 }
+
+model AnonActor {
+  anonId         String   @id @default(uuid()) @map("anon_id")
+  createdCount   Int      @default(0) @map("created_count")
+  firstSeenAt    DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt     DateTime @updatedAt @map("last_seen_at")
+  lastIpAddrHash String?  @map("last_ip_addr_hash")
+
+  // Optional v2 (daily/monthly quota)
+  // windowStartAt DateTime? @map("window_start_at")
+  // windowCount   Int       @default(0) @map("window_count")
+
+  @@index([lastSeenAt])
+}
