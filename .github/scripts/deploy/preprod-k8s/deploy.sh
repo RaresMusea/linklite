@@ -49,6 +49,7 @@ POSTGRES_PASSWORD="$(getp POSTGRES_PASSWORD)"
 POSTGRES_DB="$(getp POSTGRES_DB)"
 PRISMA_CLIENT_ENGINE_TYPE="$(getp PRISMA_CLIENT_ENGINE_TYPE)"
 APP_COMMIT_SHA="${IMAGE_TAG#testing-}"
+IP_HASH_SALT="$(getp IP_HASH_SALT)"
 
 DB_HOST="db"
 DB_PORT="5432"
@@ -66,6 +67,7 @@ kubectl -n "${NAMESPACE}" create secret generic linklite-secrets \
   --from-literal=APP_ENV="${APP_ENV}" \
   --from-literal=APP_COMMIT="${APP_COMMIT_SHA}" \
   --from-literal=APP_VERSION="${IMAGE_TAG}" \
+  --from-literal=IP_HASH_SALT="${IP_HASH_SALT}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "Secrets synced."
