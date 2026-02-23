@@ -57,6 +57,25 @@ Core variables used by the app/services:
 - `APP_ENV`, `APP_VERSION`, `APP_COMMIT`
 - `LOG_LEVEL`, `LOG_FORMAT`
 
+### Rate Limiting
+
+The API supports configurable IP-based rate limiting. If variables are not set, safe defaults are used.
+
+- `RATE_LIMIT_MAX_REQUESTS`: maximum requests allowed per IP in the window (default: `10`)
+- `RATE_LIMIT_WINDOW_SECONDS`: window size in seconds (default: `60`)
+
+Behavior with defaults:
+
+- each IP can make up to `10` requests every `60` seconds
+- once the limit is exceeded, additional requests are temporarily blocked until the window resets
+
+Example override:
+
+```bash
+RATE_LIMIT_MAX_REQUESTS=30
+RATE_LIMIT_WINDOW_SECONDS=60
+```
+
 ### Option A: Run Full Stack with Docker Compose
 
 This starts:
