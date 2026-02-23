@@ -7,6 +7,7 @@ import { upsertDomainEnrichmentJob } from '@/dal/domain_enrichment_jobs/domain_e
 import { DomainEnrichmentJobStatus } from '@/generated/prisma/enums';
 import { upsertLinkEnrichmentJob } from '@/dal/link_enrichment_jobs/link_enrichment_jobs.repo';
 import { RedirectProbeResult } from '@/lib/redirect_safety/redirect_safety_types';
+import { Prisma } from '@/generated/prisma/client';
 
 export async function createLink(input: CreateLinkInput): Promise<CreatedLink> {
     const hostname = normalizeHostnameFromUrl(input.targetUrl);
@@ -43,6 +44,23 @@ export async function createLink(input: CreateLinkInput): Promise<CreatedLink> {
     await upsertLinkEnrichmentJob(createdLink.id);
 
     return createdLink;
+}
+
+export async function createLinkTx(tx: Prisma.TransactionClient, input: CreateLinkInput): Promise<CreatedLink> {
+    const hostname = normalizeHostnameFromUrl(input.targetUrl);
+    if (!hostname) throw new InvalidHostnameError();
+
+    const domain = await upsertDomain({ hostname }, tx);
+
+    return tx.link.create({
+        data: {
+            slug: input.slug,
+            targetUrl: input.targetUrl,
+            ownerId: input.ownerId,
+            domainId: domain.id,
+        },
+        select: { id: true, domainId: true, slug: true, targetUrl: true, ownerId: true },
+    });
 }
 
 export async function increaseClickCount(slug: string): Promise<number> {
