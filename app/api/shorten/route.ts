@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateSlug } from '@/lib/utils';
 import { z } from 'zod';
 import { LinkCreationSchema } from '@/validation/LinkCreationSchema';
-import { createLink } from '@/dal/links/links.repo';
 import { getOrigin } from '@/lib/origin';
 import { AppError } from '@/lib/errors/AppError';
+import { getOrCreateAnonActor } from '@/dal/anon_actors/anon_actors.service';
+import { createAnonLinkWithQuota } from '@/dal/links/links.service';
+
+const ANON_CREATE_LIMIT = 5;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
@@ -13,22 +16,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         if (!parsed.success) {
             const tree = z.treeifyError(parsed.error);
+            const firstIssueMessage = parsed.error.issues[0]?.message ?? 'Validation error';
             return NextResponse.json(
-                { success: false, error: 'Validation error', details: tree, code: 'VALIDATION_ERROR' },
+                { success: false, error: firstIssueMessage, details: tree, code: 'VALIDATION_ERROR' },
                 { status: 400 }
             );
         }
 
+        const { quota, isNewCookie } = await getOrCreateAnonActor();
+
         const { url } = parsed.data;
         const ownerId = null;
 
-        let created = null as Awaited<ReturnType<typeof createLink>> | null;
+        let created = null as Awaited<ReturnType<typeof createAnonLinkWithQuota>> | null;
 
         for (let attempts = 0; !created && attempts < 5; attempts++) {
             const slug = generateSlug();
 
             try {
-                created = await createLink({ ownerId, slug, targetUrl: url });
+                created = await createAnonLinkWithQuota(
+                    { ownerId, slug, targetUrl: url },
+                    quota.anonId,
+                    ANON_CREATE_LIMIT
+                );
             } catch (err) {
                 if (isPrismaUniqueError(err)) continue;
                 throw err;
