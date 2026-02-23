@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 
-export async function upsertAnonActor(anonId: string, ipHash: string): Promise<void> {
-    await prisma.anonActor.upsert({
+export async function upsertAnonActor(anonId: string, ipHash: string | null) {
+    return prisma.anonActor.upsert({
         where: { anonId },
         create: {
             anonId,
