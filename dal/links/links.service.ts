@@ -16,7 +16,7 @@ export async function createAnonLinkWithQuota(
         const succeeded = await incrementAnonActorQuotaCountTx(anonId, limit, tx);
 
         if (!succeeded) {
-            throw new QuotaExceededError();
+            throw new QuotaExceededError(limit);
         }
 
         return createLinkTx(tx, input);

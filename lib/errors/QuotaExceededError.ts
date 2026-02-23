@@ -5,7 +5,7 @@ export class QuotaExceededError extends AppError {
     super(
       'QUOTA_EXCEEDED',
       limit
-        ? `You've reached the anonymous limit (${limit}). Sign up for free to create more short links.`
+        ? `You've reached the anonymous limit of ${limit} links. Sign up for free to create more short links.`
         : "You've reached the anonymous limit. Sign up for free to create more short links.",
       429,
       true
