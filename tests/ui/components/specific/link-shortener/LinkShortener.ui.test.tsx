@@ -1,9 +1,26 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+const mocks = vi.hoisted(() => ({
+    toastCustom: vi.fn(),
+    toastDismiss: vi.fn(),
+}));
+
+vi.mock('sonner', () => ({
+    toast: {
+        custom: mocks.toastCustom,
+        dismiss: mocks.toastDismiss,
+    },
+}));
+
 import LinkShortener from '@/components/specific/link-shortener/LinkShortener';
 
-describe('LinkShortener', () => {
-    it('shows shortened url on success', async () => {
+describe('LinkShortener component UI tests', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('Shows shortened url on success', async () => {
         vi.stubGlobal(
             'fetch',
             vi.fn(async () => ({
@@ -26,12 +43,12 @@ describe('LinkShortener', () => {
         expect(await screen.findByDisplayValue('http://x/a')).toBeInTheDocument();
     });
 
-    it('shows error message on failure', async () => {
+    it('Shows error message on failure', async () => {
         vi.stubGlobal(
             'fetch',
             vi.fn(async () => ({
                 ok: false,
-                json: async () => ({ success: false, error: 'bad', status: 400 }),
+                json: async () => ({ success: false, error: 'bad', code: 'INTERNAL', status: 400 }),
             }))
         );
 
@@ -45,6 +62,44 @@ describe('LinkShortener', () => {
         const buttons = screen.getAllByRole('button', { name: /shorten/i });
         fireEvent.click(buttons[0]);
 
-        expect(await screen.findByText(/Link shortened failed/i)).toBeInTheDocument();
+        expect(await screen.findByText('bad')).toBeInTheDocument();
+    });
+
+    it('Uses sonner toast with sign in/up actions for QUOTA_EXCEEDED errors', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => ({
+                ok: false,
+                json: async () => ({
+                    success: false,
+                    error: "You've reached the anonymous limit.",
+                    code: 'QUOTA_EXCEEDED',
+                    status: 429,
+                }),
+            }))
+        );
+
+        render(<LinkShortener />);
+
+        fireEvent.change(screen.getByPlaceholderText(/enter your long url/i), {
+            target: { value: 'https://example.com' },
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: /shorten/i }));
+
+        await waitFor(() => {
+            expect(mocks.toastCustom).toHaveBeenCalledTimes(1);
+        });
+
+        const [renderer, options] = mocks.toastCustom.mock.calls[0];
+        expect(typeof renderer).toBe('function');
+        expect(options).toMatchObject({
+            id: 'quota-exceeded',
+            duration: Infinity,
+        });
+
+        const renderedToast = renderer('quota-exceeded');
+        render(renderedToast);
+        expect(screen.getByLabelText(/close alert/i)).toBeInTheDocument();
     });
 });

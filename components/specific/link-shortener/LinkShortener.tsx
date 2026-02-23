@@ -1,18 +1,25 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { Link2, Copy, Check, Loader2 } from 'lucide-react';
+import { Link2, Copy, Check, Loader2, Bell, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { isCreatedLinkResponse } from '@/dal/links/links.types';
 import { isApiRouteResponseOf } from '@/lib/utils';
+import { isPlainObject } from '@/lib/guards';
+
+type ShortenErrorState = {
+    message: string;
+    code?: string;
+};
 
 export default function LinkShortener() {
     const [url, setUrl] = useState<string>('');
     const [shortUrl, setShortUrl] = useState<string>('');
-    const [error, setError] = useState<string>('');
+    const [error, setError] = useState<ShortenErrorState | null>(null);
     const [copied, setCopied] = useState<boolean>(false);
 
     const [isPending, startTransition] = useTransition();
@@ -24,37 +31,127 @@ export default function LinkShortener() {
             body: JSON.stringify({ url: longUrl }),
         });
 
-        const json = await res.json();
-        console.log(json);
+        const json: unknown = await res.json();
 
-        if (!isApiRouteResponseOf(json, isCreatedLinkResponse)) throw new Error('Bad shape');
-
-        if (!res.ok || !json.success) {
-            throw new Error('Link shortened failed');
+        if (!res.ok || (isPlainObject(json) && json.success === false)) {
+            if (isPlainObject(json) && typeof json.error === 'string') {
+                const apiError = new Error(json.error) as Error & { code?: string };
+                if (typeof json.code === 'string') {
+                    apiError.code = json.code;
+                }
+                throw apiError;
+            }
+            throw new Error('Failed to shorten URL. Please try again.');
         }
 
-        setShortUrl(json.data.shortUrl as string);
+        if (!isApiRouteResponseOf(json, isCreatedLinkResponse)) {
+            throw new Error('Unexpected response from server.');
+        }
+
+        if (!json.success) {
+            throw new Error(json.error || 'Failed to shorten URL. Please try again.');
+        }
+
+        setShortUrl(json.data.shortUrl);
         setUrl('');
         setCopied(false);
     }
 
-    const handleShorten = (e: React.FormEvent) => {
+    const handleShorten = (e: React.SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
         e.preventDefault();
-        setError('');
+        setError(null);
         setShortUrl('');
         setCopied(false);
 
         const trimmed = url.trim();
 
         if (!trimmed) {
-            setError('Please enter a URL');
+            setError({ message: 'Please enter a URL' });
             return;
         }
 
         startTransition(() => {
-            shortenUrl(trimmed).catch((err) => {
+            shortenUrl(trimmed).catch((err: unknown) => {
                 console.error(err);
-                setError(err.message || 'Failed to shorten URL. Please try again.');
+                const known = err as { message?: unknown; code?: unknown };
+                const nextError = {
+                    message:
+                        typeof known.message === 'string' && known.message
+                            ? known.message
+                            : 'Failed to shorten URL. Please try again.',
+                    code: typeof known.code === 'string' ? known.code : undefined,
+                };
+
+                if (nextError.code === 'QUOTA_EXCEEDED') {
+                    toast.custom(
+                        (id) => (
+                            <div className="relative w-full rounded-xl border border-border bg-popover/90 p-5 text-popover-foreground shadow-2xl backdrop-blur-md">
+                                <button
+                                    type="button"
+                                    aria-label="Close alert"
+                                    className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+                                    onClick={() => toast.dismiss(id)}
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+
+                                <div className="flex items-start gap-3 pr-8">
+                                    <div className="mt-0.5 rounded-full bg-primary/10 p-2">
+                                        <Bell className="h-4 w-4 text-primary" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-sm font-semibold">Anonymous limit reached</p>
+                                        <p className="mt-1 text-sm text-muted-foreground">{nextError.message}</p>
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={() => {
+                                                    toast.dismiss(id);
+                                                    window.location.assign('/signup');
+                                                }}
+                                            >
+                                                Sign up
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    toast.dismiss(id);
+                                                    window.location.assign('/signin');
+                                                }}
+                                            >
+                                                Sign in
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ),
+                        {
+                            id: 'quota-exceeded',
+                            duration: Infinity,
+                            className: 'quota-toast !border-0 !bg-transparent !shadow-none !p-0 !m-0',
+                            style: {
+                                position: 'fixed',
+                                left: '50%',
+                                right: 'auto',
+                                bottom: '20px',
+                                top: 'auto',
+                                transform: 'translateX(-50%)',
+                                width: 'min(92vw, 760px)',
+                                maxWidth: '760px',
+                                margin: 0,
+                                zIndex: 100,
+                            },
+                        }
+                    );
+                    setError(null);
+                    return;
+                }
+
+                setError(nextError);
             });
         });
     };
@@ -104,7 +201,9 @@ export default function LinkShortener() {
                     </Button>
                 </div>
 
-                {error && <p className="text-sm text-destructive mt-1">{error}</p>}
+                {error?.code !== 'QUOTA_EXCEEDED' && error ? (
+                    <p className="text-sm text-destructive mt-1">{error.message}</p>
+                ) : null}
             </form>
 
             {shortUrl && !error && (
