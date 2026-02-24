@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linklite-redis
+  namespace: linklite-preprod
+  labels:
+    app.kubernetes.io/name: linklite-redis
+    app.kubernetes.io/component: rate-limiter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: linklite-redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: linklite-redis
+        app.kubernetes.io/component: rate-limiter
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+      containers:
+        - name: redis
+          image: redis:7.2-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 6379
+              name: redis
+          args: [ "redis-server", "/usr/local/etc/redis/redis.conf" ]
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "25m"
+            limits:
+              memory: "160Mi"
+              cpu: "250m"
+          volumeMounts:
+            - name: redis-config
+              mountPath: /usr/local/etc/redis
+          readinessProbe:
+            exec:
+              command: [ "sh", "-lc", "redis-cli ping | grep PONG" ]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: [ "sh", "-lc", "redis-cli ping | grep PONG" ]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: redis-config
+          configMap:
+            name: redis-configmap
