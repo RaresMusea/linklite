@@ -27,7 +27,12 @@ spec:
           ports:
             - containerPort: 6379
               name: redis
-          args: [ "redis-server", "/usr/local/etc/redis/redis.conf" ]
+          command: [ "sh", "-lc" ]
+          args:
+            - redis-server /usr/local/etc/redis/redis.conf --requirepass "$REDIS_PASSWORD"
+          envFrom:
+            - secretRef:
+                name: linklite-secrets
           resources:
             requests:
               memory: "32Mi"
@@ -40,12 +45,13 @@ spec:
               mountPath: /usr/local/etc/redis
           readinessProbe:
             exec:
-              command: [ "sh", "-lc", "redis-cli ping | grep PONG" ]
+              command: [ "sh", "-lc", "REDISCLI_AUTH=\"$REDIS_PASSWORD\" redis-cli ping | grep PONG" ]
             initialDelaySeconds: 5
             periodSeconds: 5
+
           livenessProbe:
             exec:
-              command: [ "sh", "-lc", "redis-cli ping | grep PONG" ]
+              command: [ "sh", "-lc", "REDISCLI_AUTH=\"$REDIS_PASSWORD\" redis-cli ping | grep PONG" ]
             initialDelaySeconds: 10
             periodSeconds: 10
       volumes:
