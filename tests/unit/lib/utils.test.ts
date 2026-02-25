@@ -2,6 +2,7 @@ import { describe, beforeEach, it, vi, expect } from 'vitest';
 import {
     cn,
     generateSlug,
+    getEnvNumber,
     getPublicSuffix,
     getRegistrableDomain,
     getTld,
@@ -678,5 +679,38 @@ describe('isHttps', () => {
         expect(isHttps('not-a-url')).toBe(false);
         expect(isHttps('')).toBe(false);
         expect(isHttps('https://')).toBe(false);
+    });
+});
+
+describe('Environment numeric value retrieval tests', () => {
+    const TEST_ENV_NAME = 'TEST_GET_ENV_NUMBER';
+
+    beforeEach(() => {
+        delete process.env[TEST_ENV_NAME];
+    });
+
+    it('Parses and returns a numeric env var value', () => {
+        process.env[TEST_ENV_NAME] = '42';
+        expect(getEnvNumber(TEST_ENV_NAME)).toBe(42);
+    });
+
+    it('Returns default value when env var is missing', () => {
+        expect(getEnvNumber(TEST_ENV_NAME, 7)).toBe(7);
+    });
+
+    it('Returns default value when env var is an empty string', () => {
+        process.env[TEST_ENV_NAME] = '';
+        expect(getEnvNumber(TEST_ENV_NAME, 11)).toBe(11);
+    });
+
+    it('Throws when env var is missing and no default is provided', () => {
+        expect(() => getEnvNumber(TEST_ENV_NAME)).toThrow(`Missing required env var: ${TEST_ENV_NAME}`);
+    });
+
+    it('Throws when env var is not a valid number', () => {
+        process.env[TEST_ENV_NAME] = 'not-a-number';
+        expect(() => getEnvNumber(TEST_ENV_NAME)).toThrow(
+            `Invalid number for env var ${TEST_ENV_NAME}: not-a-number`
+        );
     });
 });
