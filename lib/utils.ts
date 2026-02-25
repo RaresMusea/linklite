@@ -158,3 +158,20 @@ export function isHttps(url: string): boolean {
         return false;
     }
 }
+
+export function getEnvNumber(name: string, defaultValue?: number): number {
+    const value = process.env[name];
+
+    if (value === undefined || value === '') {
+        if (defaultValue !== undefined) return defaultValue;
+        throw new Error(`Missing required env var: ${name}`);
+    }
+
+    const parsed = Number(value);
+
+    if (Number.isNaN(parsed)) {
+        throw new Error(`Invalid number for env var ${name}: ${value}`);
+    }
+
+    return parsed;
+}
