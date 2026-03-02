@@ -38,6 +38,9 @@ importers:
       framer-motion:
         specifier: ^12.23.26
         version: 12.34.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      goey-toast:
+        specifier: ^0.3.0
+        version: 0.3.0(framer-motion@12.34.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       ipaddr.js:
         specifier: ^2.3.0
         version: 2.3.0
@@ -2765,6 +2768,14 @@ packages:
 
   globrex@0.1.2:
     resolution: {integrity: sha512-uHJgbwAMwNFf5mLst7IWLNg14x1CkeqglJb/K3doi4dw6q2IvAAmM/Y81kevy83wP+Sst+nutFTYOGg3d1lsxg==}
+
+  goey-toast@0.3.0:
+    resolution: {integrity: sha512-JJiXihHDDsKy8GkWWac5ADYYPz7b1cMJjEsp91pL9QNubXIH8Yc08j6XbymLbv/Nh2NUgiVxNUxNQZXcnMejFA==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      framer-motion: '>=10.0.0'
+      react: '>=18.0.0'
+      react-dom: '>=18.0.0'
 
   gopd@1.2.0:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
@@ -6885,6 +6896,13 @@ snapshots:
       slash: 3.0.0
 
   globrex@0.1.2: {}
+
+  goey-toast@0.3.0(framer-motion@12.34.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+    dependencies:
+      framer-motion: 12.34.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+      sonner: 2.0.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
 
   gopd@1.2.0: {}
 
