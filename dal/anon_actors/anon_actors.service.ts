@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { cookies, headers } from 'next/headers';
-import { getClientIp, hashIp } from '@/lib/network/ip';
+import { cookies} from 'next/headers';
 import { upsertAnonActor } from '@/dal/anon_actors/anon_actors.repo';
 import { toAnonActorQuota } from '@/dal/anon_actors/anon_actors.types';
 
@@ -15,7 +14,7 @@ function shouldUseSecureCookie(): boolean {
  * Gets or creates anon_id cookie and ensures AnonActor row exists.
  * Returns anonId and whether it was newly created (cookie-wise).
  */
-export async function getOrCreateAnonActor() {
+export async function getOrCreateAnonActor(ipHash: string | null) {
     const cookieStore = await cookies();
     let anonId = cookieStore.get(ANON_COOKIE)?.value ?? null;
     let isNewCookie = false;
@@ -35,8 +34,7 @@ export async function getOrCreateAnonActor() {
         });
     }
 
-    const userIp = getClientIp(await headers());
-    const actor = await upsertAnonActor(anonId, hashIp(userIp));
+    const actor = await upsertAnonActor(anonId, ipHash);
 
     return {
         isNewCookie,
