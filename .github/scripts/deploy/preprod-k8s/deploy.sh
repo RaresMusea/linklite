@@ -60,6 +60,10 @@ MANIFESTS_DIR="deploy/k8s/preprod"
 
 kubectl apply -f ${MANIFESTS_DIR}/namespace.yaml || true
 
+kubectl -n "${NAMESPACE}" create secret generic redis-secrets \
+  --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
 kubectl -n "${NAMESPACE}" create secret generic linklite-secrets \
   --from-literal=POSTGRES_USER="${POSTGRES_USER}" \
   --from-literal=POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
@@ -74,6 +78,15 @@ kubectl -n "${NAMESPACE}" create secret generic linklite-secrets \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "Secrets synced."
+
+# ----------------------------------------------------------------
+# Apply REDIS manifests
+# ----------------------------------------------------------------
+kubectl apply -f ${MANIFESTS_DIR}/redis/redis-configmap.yaml
+kubectl apply -f ${MANIFESTS_DIR}/redis/redis-service.yaml
+kubectl apply -f ${MANIFESTS_DIR}/redis/redis-deployment.yaml
+
+kubectl -n "${NAMESPACE}" rollout status deployment/linklite-redis --timeout=300s
 
 # ----------------------------------------------------------------
 # Apply db manifests
