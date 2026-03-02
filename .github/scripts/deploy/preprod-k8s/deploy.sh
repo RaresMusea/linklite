@@ -51,7 +51,7 @@ PRISMA_CLIENT_ENGINE_TYPE="$(getp PRISMA_CLIENT_ENGINE_TYPE)"
 APP_COMMIT_SHA="${IMAGE_TAG#testing-}"
 IP_HASH_SALT="$(getp IP_HASH_SALT)"
 REDIS_PASSWORD="$(getp REDIS_PASSWORD)"
-REDIS_URL="redis://default:${REDIS_PASSWORD}@redis:6379"
+REDIS_URL="redis://:${REDIS_PASSWORD}@linklite-redis:6379"
 
 DB_HOST="db"
 DB_PORT="5432"
@@ -59,6 +59,10 @@ DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST}:${DB
 MANIFESTS_DIR="deploy/k8s/preprod"
 
 kubectl apply -f ${MANIFESTS_DIR}/namespace.yaml || true
+
+kubectl -n "${NAMESPACE}" create secret generic redis-secrets \
+  --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD}" \
+  --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl -n "${NAMESPACE}" create secret generic linklite-secrets \
   --from-literal=POSTGRES_USER="${POSTGRES_USER}" \
@@ -74,6 +78,15 @@ kubectl -n "${NAMESPACE}" create secret generic linklite-secrets \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "Secrets synced."
+
+# ----------------------------------------------------------------
+# Apply REDIS manifests
+# ----------------------------------------------------------------
+kubectl apply -f ${MANIFESTS_DIR}/redis/redis-configmap.yaml
+kubectl apply -f ${MANIFESTS_DIR}/redis/redis-service.yaml
+kubectl apply -f ${MANIFESTS_DIR}/redis/redis-deployment.yaml
+
+kubectl -n "${NAMESPACE}" rollout status deployment/linklite-redis --timeout=300s
 
 # ----------------------------------------------------------------
 # Apply db manifests

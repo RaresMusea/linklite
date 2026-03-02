@@ -3,22 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
     mockCookieGet: vi.fn(),
     mockCookieSet: vi.fn(),
-    mockHeaders: vi.fn(),
     mockCookies: vi.fn(),
-    mockGetClientIp: vi.fn(),
-    mockHashIp: vi.fn(),
     mockUpsertAnonActor: vi.fn(),
     mockToAnonActorQuota: vi.fn(),
 }));
 
 vi.mock('next/headers', () => ({
     cookies: mocks.mockCookies,
-    headers: mocks.mockHeaders,
-}));
-
-vi.mock('@/lib/network/ip', () => ({
-    getClientIp: mocks.mockGetClientIp,
-    hashIp: mocks.mockHashIp,
 }));
 
 vi.mock('@/dal/anon_actors/anon_actors.repo', () => ({
@@ -45,14 +36,11 @@ describe('getOrCreateAnonActor unit tests', () => {
     it('Uses existing anon_id cookie and does not set a new one', async () => {
         // Arrange
         mocks.mockCookieGet.mockReturnValue({ value: 'anon-existing' });
-        mocks.mockHeaders.mockResolvedValue(new Headers({ 'x-forwarded-for': '1.2.3.4' }));
-        mocks.mockGetClientIp.mockReturnValue('1.2.3.4');
-        mocks.mockHashIp.mockReturnValue('hashed-ip');
         mocks.mockUpsertAnonActor.mockResolvedValue({ anonId: 'anon-existing', createdCount: 2 });
         mocks.mockToAnonActorQuota.mockReturnValue({ anonId: 'anon-existing', createdCount: 2 });
 
         // Act
-        const result = await getOrCreateAnonActor();
+        const result = await getOrCreateAnonActor('hashed-ip');
 
         // Assert
         expect(mocks.mockCookieSet).not.toHaveBeenCalled();
@@ -66,14 +54,11 @@ describe('getOrCreateAnonActor unit tests', () => {
     it('Creates anon_id cookie when missing and persists actor with null hash when ip is missing', async () => {
         // Arrange
         mocks.mockCookieGet.mockReturnValue(undefined);
-        mocks.mockHeaders.mockResolvedValue(new Headers());
-        mocks.mockGetClientIp.mockReturnValue(null);
-        mocks.mockHashIp.mockReturnValue(null);
         mocks.mockUpsertAnonActor.mockResolvedValue({ anonId: 'generated-id', createdCount: 0 });
         mocks.mockToAnonActorQuota.mockReturnValue({ anonId: 'generated-id', createdCount: 0 });
 
         // Act
-        const result = await getOrCreateAnonActor();
+        const result = await getOrCreateAnonActor(null);
 
         // Assert
         expect(mocks.mockCookieSet).toHaveBeenCalledTimes(1);
@@ -98,15 +83,12 @@ describe('getOrCreateAnonActor unit tests', () => {
         vi.stubEnv('NODE_ENV', 'production');
 
         mocks.mockCookieGet.mockReturnValue(undefined);
-        mocks.mockHeaders.mockResolvedValue(new Headers());
-        mocks.mockGetClientIp.mockReturnValue(null);
-        mocks.mockHashIp.mockReturnValue(null);
         mocks.mockUpsertAnonActor.mockResolvedValue({ anonId: 'generated-id', createdCount: 0 });
         mocks.mockToAnonActorQuota.mockReturnValue({ anonId: 'generated-id', createdCount: 0 });
 
         try {
             // Act
-            await getOrCreateAnonActor();
+            await getOrCreateAnonActor(null);
         } finally {
             vi.unstubAllEnvs();
         }

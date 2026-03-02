@@ -6,11 +6,27 @@ import { getOrigin } from '@/lib/origin';
 import { AppError } from '@/lib/errors/AppError';
 import { getOrCreateAnonActor } from '@/dal/anon_actors/anon_actors.service';
 import { createAnonLinkWithQuota } from '@/dal/links/links.service';
+import { getClientIp, hashIp } from '@/lib/network/ip';
+import { checkShortenIpRateLimit } from '@/lib/rate_limit/rate_limiter';
 
 const ANON_CREATE_LIMIT = 5;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
+        const ip = getClientIp(request.headers);
+        const ipHash = ip ? hashIp(ip) : null;
+
+        if (ipHash) {
+            const rl = await checkShortenIpRateLimit({ ipHash });
+
+            if (rl && !rl.ok) {
+                return NextResponse.json(
+                    { success: false, error: 'Too many requests', code: 'RATE_LIMITED' },
+                    { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } }
+                );
+            }
+        }
+
         const json: unknown = await request.json().catch(() => null);
         const parsed = LinkCreationSchema.safeParse(json);
 
@@ -23,7 +39,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             );
         }
 
-        const { quota, isNewCookie } = await getOrCreateAnonActor();
+        const { quota, isNewCookie } = await getOrCreateAnonActor(ipHash);
 
         const { url } = parsed.data;
         const ownerId = null;

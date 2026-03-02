@@ -5,6 +5,8 @@ import { generateSlug } from '@/lib/utils';
 import { getOrCreateAnonActor } from '@/dal/anon_actors/anon_actors.service';
 import { createAnonLinkWithQuota } from '@/dal/links/links.service';
 import { QuotaExceededError } from '@/lib/errors/QuotaExceededError';
+import { checkShortenIpRateLimit } from '@/lib/rate_limit/rate_limiter';
+import { getClientIp, hashIp } from '@/lib/network/ip';
 
 vi.mock('@/lib/utils', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@/lib/utils')>();
@@ -20,6 +22,15 @@ vi.mock('@/dal/anon_actors/anon_actors.service', () => ({
 
 vi.mock('@/dal/links/links.service', () => ({
     createAnonLinkWithQuota: vi.fn(),
+}));
+
+vi.mock('@/lib/rate_limit/rate_limiter', () => ({
+    checkShortenIpRateLimit: vi.fn(),
+}));
+
+vi.mock('@/lib/network/ip', () => ({
+    getClientIp: vi.fn(),
+    hashIp: vi.fn(),
 }));
 
 function req(body: unknown): NextRequest {
@@ -47,6 +58,59 @@ describe('POST /api/shorten (unit tests)', () => {
                 createdCount: 0,
             },
         });
+        vi.mocked(checkShortenIpRateLimit).mockResolvedValue({
+            ok: true,
+            remaining: 9,
+        });
+        vi.mocked(getClientIp).mockReturnValue('1.2.3.4');
+        vi.mocked(hashIp).mockReturnValue('hashed-ip');
+    });
+
+    it('Returns 429 when request is rate limited', async () => {
+        vi.mocked(checkShortenIpRateLimit).mockResolvedValueOnce({
+            ok: false,
+            retryAfterSec: 42,
+        });
+
+        const res = await POST(req({ url: 'https://example.com' }) as never);
+
+        expect(res.status).toBe(429);
+        expect(res.headers.get('Retry-After')).toBe('42');
+
+        const json = await res.json();
+        expect(json.success).toBe(false);
+        expect(json.code).toBe('RATE_LIMITED');
+        expect(json.error).toBe('Too many requests');
+
+        expect(vi.mocked(checkShortenIpRateLimit)).toHaveBeenCalledWith({ ipHash: 'hashed-ip' });
+        expect(vi.mocked(createAnonLinkWithQuota)).not.toHaveBeenCalled();
+    });
+
+    it('Skips rate limiting when client ip is unavailable', async () => {
+        vi.mocked(getClientIp).mockReturnValueOnce(null);
+
+        const res = await POST(req({ url: 'not-a-valid-url' }) as never);
+
+        expect(res.status).toBe(400);
+        expect(vi.mocked(checkShortenIpRateLimit)).not.toHaveBeenCalled();
+    });
+
+    it('Skips rate limiting and passes null ipHash when hashIp returns null', async () => {
+        vi.mocked(hashIp).mockReturnValueOnce(null);
+        vi.mocked(generateSlug).mockReturnValueOnce('abc123');
+        vi.mocked(createAnonLinkWithQuota).mockResolvedValueOnce({
+            id: '1',
+            domainId: '2',
+            slug: 'abc123',
+            targetUrl: 'https://example.com',
+            ownerId: null,
+        });
+
+        const res = await POST(req({ url: 'https://example.com' }) as never);
+
+        expect(res.status).toBe(201);
+        expect(vi.mocked(checkShortenIpRateLimit)).not.toHaveBeenCalled();
+        expect(vi.mocked(getOrCreateAnonActor)).toHaveBeenCalledWith(null);
     });
 
     it('Returns 400 with first validation issue for invalid URL format', async () => {
