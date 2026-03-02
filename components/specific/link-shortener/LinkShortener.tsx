@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link2, Copy, Check, Loader2, Bell, TriangleAlert, X } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -18,12 +18,23 @@ type ShortenErrorState = {
 };
 
 export default function LinkShortener() {
+    const MIN_SPINNER_VISIBLE_MS = 230;
     const [url, setUrl] = useState<string>('');
     const [shortUrl, setShortUrl] = useState<string>('');
     const [error, setError] = useState<ShortenErrorState | null>(null);
     const [copied, setCopied] = useState<boolean>(false);
+    const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+    const [showPendingSpinner, setShowPendingSpinner] = useState<boolean>(false);
+    const spinnerShownAtRef = useRef<number | null>(null);
+    const hideSpinnerTimerRef = useRef<number | null>(null);
 
-    const [isPending, startTransition] = useTransition();
+    useEffect(() => {
+        return () => {
+            if (hideSpinnerTimerRef.current) {
+                window.clearTimeout(hideSpinnerTimerRef.current);
+            }
+        };
+    }, []);
 
     async function shortenUrl(longUrl: string) {
         const res = await fetch('/api/shorten', {
@@ -70,7 +81,6 @@ export default function LinkShortener() {
     const handleShorten = (e: React.SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
         e.preventDefault();
         setError(null);
-        setShortUrl('');
         setCopied(false);
 
         const trimmed = url.trim();
@@ -80,8 +90,17 @@ export default function LinkShortener() {
             return;
         }
 
-        startTransition(() => {
-            shortenUrl(trimmed).catch((err: unknown) => {
+        if (hideSpinnerTimerRef.current) {
+            window.clearTimeout(hideSpinnerTimerRef.current);
+            hideSpinnerTimerRef.current = null;
+        }
+
+        spinnerShownAtRef.current = Date.now();
+        setShowPendingSpinner(true);
+        setIsSubmitting(true);
+
+        shortenUrl(trimmed)
+            .catch((err: unknown) => {
                 console.error(err);
                 const known = err as { message?: unknown; code?: unknown; retryAfterSec?: unknown };
                 const nextError = {
@@ -184,8 +203,18 @@ export default function LinkShortener() {
                 }
 
                 setError(nextError);
+            })
+            .finally(() => {
+                setIsSubmitting(false);
+                const shownAt = spinnerShownAtRef.current ?? Date.now();
+                const elapsed = Date.now() - shownAt;
+                const remaining = Math.max(0, MIN_SPINNER_VISIBLE_MS - elapsed);
+
+                hideSpinnerTimerRef.current = window.setTimeout(() => {
+                    setShowPendingSpinner(false);
+                    hideSpinnerTimerRef.current = null;
+                }, remaining);
             });
-        });
     };
 
     const handleCopy = async () => {
@@ -214,16 +243,16 @@ export default function LinkShortener() {
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
                             placeholder="Enter your long URL here..."
-                            disabled={isPending}
+                            disabled={isSubmitting}
                             className="flex-1 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none shadow-none text-base"
                         />
 
                         <Button
                             type="submit"
-                            disabled={isPending}
+                            disabled={isSubmitting}
                             className="px-6 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 disabled:opacity-60"
                         >
-                            {isPending ? (
+                            {showPendingSpinner ? (
                                 <span className="flex items-center justify-center gap-2">
                                     <Loader2 className="animate-spin h-5 w-5" />
                                     Shortening...
@@ -240,10 +269,7 @@ export default function LinkShortener() {
                 </form>
 
                 {shortUrl && !error && (
-                    <Card
-                        key={shortUrl}
-                        className="mt-6 border-border/40 bg-background/60 backdrop-blur-lg shadow-xl rounded-2xl animate-fade-in"
-                    >
+                    <Card className="mt-6 border-border/40 bg-background/60 backdrop-blur-lg shadow-xl rounded-2xl animate-fade-in">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-base">Your shortened URL</CardTitle>
                             <CardDescription className="text-xs">

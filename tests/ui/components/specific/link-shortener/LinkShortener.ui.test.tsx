@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { isValidElement } from 'react';
 
 const mocks = vi.hoisted(() => ({
@@ -179,5 +179,84 @@ describe('LinkShortener component UI tests', () => {
 
         const [, options] = mocks.toastWarning.mock.calls[0];
         expect(options.description).toContain('Please wait a bit and try again.');
+    });
+
+    it('Keeps spinner visible for a minimum duration even for fast responses', async () => {
+        vi.useFakeTimers();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => ({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: { created: { id: '1', slug: 'a', targetUrl: 'x', ownerId: null }, shortUrl: 'http://x/a' },
+                }),
+            })) as never
+        );
+
+        render(<LinkShortener />);
+
+        fireEvent.change(screen.getByPlaceholderText(/enter your long url/i), {
+            target: { value: 'https://example.com' },
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: /shorten/i }));
+        expect(screen.getByText(/shortening\.\.\./i)).toBeInTheDocument();
+
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        act(() => {
+            vi.advanceTimersByTime(200);
+        });
+        expect(screen.getByText(/shortening\.\.\./i)).toBeInTheDocument();
+
+        act(() => {
+            vi.advanceTimersByTime(40);
+        });
+        expect(screen.getByRole('button', { name: /shorten/i })).toBeInTheDocument();
+
+        vi.useRealTimers();
+    });
+
+    it('Shows spinner again on subsequent shorten attempts', async () => {
+        vi.useFakeTimers();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => ({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: { created: { id: '1', slug: 'a', targetUrl: 'x', ownerId: null }, shortUrl: 'http://x/a' },
+                }),
+            })) as never
+        );
+
+        render(<LinkShortener />);
+
+        const input = screen.getByPlaceholderText(/enter your long url/i);
+        const button = screen.getByRole('button', { name: /shorten/i });
+
+        fireEvent.change(input, { target: { value: 'https://example.com' } });
+        fireEvent.click(button);
+        expect(screen.getByText(/shortening\.\.\./i)).toBeInTheDocument();
+
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        act(() => {
+            vi.advanceTimersByTime(300);
+        });
+        expect(screen.getByRole('button', { name: /shorten/i })).toBeInTheDocument();
+
+        fireEvent.change(input, { target: { value: 'https://example.org' } });
+        fireEvent.click(screen.getByRole('button', { name: /shorten/i }));
+        expect(screen.getByText(/shortening\.\.\./i)).toBeInTheDocument();
+
+        vi.useRealTimers();
     });
 });
