@@ -57,4 +57,4 @@ spec:
       volumes:
         - name: redis-config
           configMap:
-            name: redis-configmap
+            name: redis-config
