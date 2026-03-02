@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { Link2, Copy, Check, Loader2, Bell, X } from 'lucide-react';
+import { Link2, Copy, Check, Loader2, Bell, TriangleAlert, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { isPlainObject } from '@/lib/guards';
 type ShortenErrorState = {
     message: string;
     code?: string;
+    retryAfterSec?: number;
 };
 
 export default function LinkShortener() {
@@ -35,9 +36,18 @@ export default function LinkShortener() {
 
         if (!res.ok || (isPlainObject(json) && json.success === false)) {
             if (isPlainObject(json) && typeof json.error === 'string') {
-                const apiError = new Error(json.error) as Error & { code?: string };
+                const apiError = new Error(json.error) as Error & {
+                    code?: string;
+                    retryAfterSec?: number;
+                };
                 if (typeof json.code === 'string') {
                     apiError.code = json.code;
+                }
+                const retryAfter = Number(
+                    typeof res.headers?.get === 'function' ? res.headers.get('Retry-After') : undefined
+                );
+                if (Number.isFinite(retryAfter) && retryAfter > 0) {
+                    apiError.retryAfterSec = retryAfter;
                 }
                 throw apiError;
             }
@@ -73,13 +83,17 @@ export default function LinkShortener() {
         startTransition(() => {
             shortenUrl(trimmed).catch((err: unknown) => {
                 console.error(err);
-                const known = err as { message?: unknown; code?: unknown };
+                const known = err as { message?: unknown; code?: unknown; retryAfterSec?: unknown };
                 const nextError = {
                     message:
                         typeof known.message === 'string' && known.message
                             ? known.message
                             : 'Failed to shorten URL. Please try again.',
                     code: typeof known.code === 'string' ? known.code : undefined,
+                    retryAfterSec:
+                        typeof known.retryAfterSec === 'number' && Number.isFinite(known.retryAfterSec)
+                            ? known.retryAfterSec
+                            : undefined,
                 };
 
                 if (nextError.code === 'QUOTA_EXCEEDED') {
@@ -151,6 +165,24 @@ export default function LinkShortener() {
                     return;
                 }
 
+                if (nextError.code === 'RATE_LIMITED') {
+                    const retryHint =
+                        typeof nextError.retryAfterSec === 'number'
+                            ? `Please try again in ${nextError.retryAfterSec} second${nextError.retryAfterSec === 1 ? '' : 's'}.`
+                            : 'Please wait a bit and try again.';
+
+                    toast.warning('Rate limit reached', {
+                        description: `Too many requests from this IP. ${retryHint}`,
+                        icon: <TriangleAlert className="h-4 w-4 text-primary" />,
+                        duration: Infinity,
+                        closeButton: true,
+                        dismissible: true,
+                        className: '!bg-popover/75 !backdrop-blur-md',
+                    });
+                    setError(null);
+                    return;
+                }
+
                 setError(nextError);
             });
         });
@@ -167,85 +199,87 @@ export default function LinkShortener() {
     };
 
     return (
-        <div className="w-full max-w-2xl mx-auto mt-10">
-            {/* FORM */}
-            <form
-                onSubmit={handleShorten}
-                className="bg-background/70 backdrop-blur-lg shadow-xl rounded-2xl p-6 border border-border/40 space-y-4 animate-fade-in"
-            >
-                <div className="flex items-center gap-3 p-2 bg-accent/30 rounded-xl border border-border/50">
-                    <Link2 className="h-5 w-5 text-muted-foreground ml-2" />
-
-                    <Input
-                        type="text"
-                        value={url}
-                        onChange={(e) => setUrl(e.target.value)}
-                        placeholder="Enter your long URL here..."
-                        disabled={isPending}
-                        className="flex-1 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none shadow-none text-base"
-                    />
-
-                    <Button
-                        type="submit"
-                        disabled={isPending}
-                        className="px-6 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 disabled:opacity-60"
-                    >
-                        {isPending ? (
-                            <span className="flex items-center justify-center gap-2">
-                                <Loader2 className="animate-spin h-5 w-5" />
-                                Shortening...
-                            </span>
-                        ) : (
-                            'Shorten'
-                        )}
-                    </Button>
-                </div>
-
-                {error?.code !== 'QUOTA_EXCEEDED' && error ? (
-                    <p className="text-sm text-destructive mt-1">{error.message}</p>
-                ) : null}
-            </form>
-
-            {shortUrl && !error && (
-                <Card
-                    key={shortUrl}
-                    className="mt-6 border-border/40 bg-background/60 backdrop-blur-lg shadow-xl rounded-2xl animate-fade-in"
+        <>
+            <div className="w-full max-w-2xl mx-auto mt-10">
+                {/* FORM */}
+                <form
+                    onSubmit={handleShorten}
+                    className="bg-background/70 backdrop-blur-lg shadow-xl rounded-2xl p-6 border border-border/40 space-y-4 animate-fade-in"
                 >
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Your shortened URL</CardTitle>
-                        <CardDescription className="text-xs">
-                            Share this link and track its performance from your dashboard.
-                        </CardDescription>
-                    </CardHeader>
+                    <div className="flex items-center gap-3 p-2 bg-accent/30 rounded-xl border border-border/50">
+                        <Link2 className="h-5 w-5 text-muted-foreground ml-2" />
 
-                    <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
                         <Input
                             type="text"
-                            readOnly
-                            value={shortUrl}
-                            className="flex-1 font-medium bg-background/60 text-primary border border-border/50"
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            placeholder="Enter your long URL here..."
+                            disabled={isPending}
+                            className="flex-1 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none shadow-none text-base"
                         />
 
                         <Button
-                            type="button"
-                            onClick={handleCopy}
-                            className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-4 py-2"
+                            type="submit"
+                            disabled={isPending}
+                            className="px-6 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 disabled:opacity-60"
                         >
-                            {copied ? (
-                                <>
-                                    <Check className="h-4 w-4" />
-                                    Copied!
-                                </>
+                            {isPending ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    <Loader2 className="animate-spin h-5 w-5" />
+                                    Shortening...
+                                </span>
                             ) : (
-                                <>
-                                    <Copy className="h-4 w-4" />
-                                    Copy
-                                </>
+                                'Shorten'
                             )}
                         </Button>
-                    </CardContent>
-                </Card>
-            )}
-        </div>
+                    </div>
+
+                    {error?.code !== 'QUOTA_EXCEEDED' && error ? (
+                        <p className="text-sm text-destructive mt-1">{error.message}</p>
+                    ) : null}
+                </form>
+
+                {shortUrl && !error && (
+                    <Card
+                        key={shortUrl}
+                        className="mt-6 border-border/40 bg-background/60 backdrop-blur-lg shadow-xl rounded-2xl animate-fade-in"
+                    >
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base">Your shortened URL</CardTitle>
+                            <CardDescription className="text-xs">
+                                Share this link and track its performance from your dashboard.
+                            </CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <Input
+                                type="text"
+                                readOnly
+                                value={shortUrl}
+                                className="flex-1 font-medium bg-background/60 text-primary border border-border/50"
+                            />
+
+                            <Button
+                                type="button"
+                                onClick={handleCopy}
+                                className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-4 py-2"
+                            >
+                                {copied ? (
+                                    <>
+                                        <Check className="h-4 w-4" />
+                                        Copied!
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="h-4 w-4" />
+                                        Copy
+                                    </>
+                                )}
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
+        </>
     );
 }
