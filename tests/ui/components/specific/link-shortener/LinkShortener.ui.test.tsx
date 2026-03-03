@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { isValidElement } from 'react';
 
@@ -21,6 +21,13 @@ import LinkShortener from '@/components/specific/link-shortener/LinkShortener';
 describe('LinkShortener component UI tests', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
     });
 
     it('Shows shortened url on success', async () => {
@@ -151,6 +158,50 @@ describe('LinkShortener component UI tests', () => {
         expect((options.icon as { props?: { className?: string } }).props?.className).toContain('text-primary');
     });
 
+    it('Disables shorten button during rate-limit cooldown and re-enables after timeout', async () => {
+        vi.useFakeTimers();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => ({
+                ok: false,
+                headers: {
+                    get: vi.fn((name: string) => (name === 'Retry-After' ? '2' : null)),
+                },
+                json: async () => ({
+                    success: false,
+                    error: 'Too many requests',
+                    code: 'RATE_LIMITED',
+                    status: 429,
+                }),
+            }))
+        );
+
+        render(<LinkShortener />);
+
+        fireEvent.change(screen.getByPlaceholderText(/enter your long url/i), {
+            target: { value: 'https://example.com' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /shorten/i }));
+
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+            await vi.advanceTimersByTimeAsync(250);
+        });
+        expect(screen.getByRole('button', { name: /retry in 2s/i })).toBeDisabled();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(1000);
+        });
+        expect(screen.getByRole('button', { name: /retry in 1s/i })).toBeDisabled();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(1000);
+        });
+        expect(screen.getByRole('button', { name: /shorten/i })).toBeEnabled();
+        expect(mocks.toastDismiss).toHaveBeenCalledWith('rate-limit-reached');
+    });
+
     it('Uses fallback message for RATE_LIMITED when Retry-After is missing', async () => {
         vi.stubGlobal(
             'fetch',
@@ -257,6 +308,10 @@ describe('LinkShortener component UI tests', () => {
         fireEvent.click(screen.getByRole('button', { name: /shorten/i }));
         expect(screen.getByText(/shortening\.\.\./i)).toBeInTheDocument();
 
-        vi.useRealTimers();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+            vi.advanceTimersByTime(300);
+        });
     });
 });
