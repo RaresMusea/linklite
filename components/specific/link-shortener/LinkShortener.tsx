@@ -169,25 +169,27 @@ export default function LinkShortener() {
     };
 
     return (
-        <div className="w-full max-w-2xl mx-auto mt-10">
+        <div className="mx-auto mt-10 w-full max-w-2xl px-4 sm:px-0">
             <form
                 onSubmit={handleShorten}
-                className="bg-background/70 backdrop-blur-lg shadow-xl rounded-2xl p-6 border border-border/40 space-y-4 animate-fade-in"
+                className="animate-fade-in space-y-4 rounded-2xl border border-border/40 bg-background/70 p-4 shadow-xl backdrop-blur-lg sm:p-6"
             >
-                <div className="flex items-center gap-3 p-2 bg-accent/30 rounded-xl border border-border/50">
-                    <Link2 className="h-5 w-5 text-muted-foreground ml-2" />
-                    <Input
-                        type="text"
-                        value={url}
-                        onChange={(e) => setUrl(e.target.value)}
-                        placeholder="Enter your long URL here..."
-                        disabled={isSubmitting}
-                        className="flex-1 bg-transparent border-none focus-visible:ring-0 shadow-none text-base"
-                    />
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 sm:rounded-xl sm:border sm:border-border/50 sm:bg-accent/30 sm:p-2">
+                    <div className="flex h-11 w-full items-center gap-2 rounded-lg border border-border/40 bg-background/50 px-3">
+                        <Link2 className="h-5 w-5 shrink-0 text-muted-foreground" />
+                        <Input
+                            type="text"
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            placeholder="Enter your long URL here..."
+                            disabled={isSubmitting}
+                            className="h-full flex-1 border-none bg-transparent px-2 text-base placeholder:text-sm sm:placeholder:text-base shadow-none focus-visible:ring-0"
+                        />
+                    </div>
                     <Button
                         type="submit"
                         disabled={isSubmitting || isRateLimited}
-                        className="px-6 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 disabled:opacity-60"
+                        className="h-10 w-full shrink-0 rounded-xl bg-primary px-6 py-1.5 text-primary-foreground transition-all duration-200 hover:bg-primary/90 disabled:opacity-60 sm:h-9 sm:w-auto"
                     >
                         {spinnerVisible ? (
                             <span className="flex items-center gap-2">
