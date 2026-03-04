@@ -1,251 +1,213 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
-import { Link2, Copy, Check, Loader2, Bell, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link2, Loader2, Bell, TriangleAlert, X } from 'lucide-react';
 import { toast } from 'sonner';
-
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { isCreatedLinkResponse } from '@/dal/links/links.types';
-import { isApiRouteResponseOf } from '@/lib/utils';
-import { isPlainObject } from '@/lib/guards';
+import { useRateLimit } from '@/components/specific/link-shortener/hooks/useRateLimit';
+import { useMinDurationSpinner } from '@/hooks/ui/useMinDurationSpinner';
+import { shortenUrl } from '@/http/shorten';
+import { ShortenedUrlCard } from '@/components/specific/link-shortener/ShortenedUrlCard';
 
 type ShortenErrorState = {
     message: string;
     code?: string;
+    retryAfterSec?: number;
 };
 
+function toShortenError(err: unknown): ShortenErrorState {
+    if (err instanceof Error) {
+        const e = err as Error & { code?: string; retryAfterSec?: number };
+        return {
+            message: e.message || 'Failed to shorten URL. Please try again.',
+            code: e.code,
+            retryAfterSec: e.retryAfterSec,
+        };
+    }
+    return { message: 'Failed to shorten URL. Please try again.' };
+}
+
+export function showQuotaExceededToast(nextError: ShortenErrorState) {
+    toast.custom(
+        (id) => (
+            <div className="relative w-full rounded-xl border border-border bg-popover/90 p-5 text-popover-foreground shadow-2xl backdrop-blur-md">
+                <button
+                    type="button"
+                    aria-label="Close alert"
+                    className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+                    onClick={() => toast.dismiss(id)}
+                >
+                    <X className="h-4 w-4" />
+                </button>
+
+                <div className="flex items-start gap-3 pr-8">
+                    <div className="mt-0.5 rounded-full bg-primary/10 p-2">
+                        <Bell className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                        <p className="text-sm font-semibold">Anonymous limit reached</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{nextError.message}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => {
+                                    toast.dismiss(id);
+                                    window.location.assign('/signup');
+                                }}
+                            >
+                                Sign up
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    toast.dismiss(id);
+                                    window.location.assign('/signin');
+                                }}
+                            >
+                                Sign in
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        ),
+        {
+            id: 'quota-exceeded',
+            duration: Infinity,
+            className: 'quota-toast !border-0 !bg-transparent !shadow-none !p-0 !m-0',
+            style: {
+                position: 'fixed',
+                left: '50%',
+                right: 'auto',
+                bottom: '20px',
+                top: 'auto',
+                transform: 'translateX(-50%)',
+                width: 'min(92vw, 760px)',
+                maxWidth: '760px',
+                margin: 0,
+                zIndex: 100,
+            },
+        }
+    );
+}
+
+export function showRateLimitToast(nextError: ShortenErrorState) {
+    const RATE_LIMIT_TOAST_ID = 'rate-limit-reached';
+
+    const retryHint =
+        typeof nextError.retryAfterSec === 'number'
+            ? `Please try again in ${nextError.retryAfterSec} second${nextError.retryAfterSec === 1 ? '' : 's'}.`
+            : 'Please wait a bit and try again.';
+
+    toast.warning('Rate limit reached', {
+        description: `Too many requests from this IP. ${retryHint}`,
+        icon: <TriangleAlert className="h-4 w-4 text-primary" />,
+        duration: Infinity,
+        id: RATE_LIMIT_TOAST_ID,
+        closeButton: true,
+        dismissible: true,
+        className: '!bg-popover/75 !backdrop-blur-md',
+    });
+}
+
 export default function LinkShortener() {
+    const { rateLimitRemainingSec, isRateLimited, startCooldown } = useRateLimit();
     const [url, setUrl] = useState<string>('');
     const [shortUrl, setShortUrl] = useState<string>('');
     const [error, setError] = useState<ShortenErrorState | null>(null);
-    const [copied, setCopied] = useState<boolean>(false);
+    const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-    const [isPending, startTransition] = useTransition();
-
-    async function shortenUrl(longUrl: string) {
-        const res = await fetch('/api/shorten', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: longUrl }),
-        });
-
-        const json: unknown = await res.json();
-
-        if (!res.ok || (isPlainObject(json) && json.success === false)) {
-            if (isPlainObject(json) && typeof json.error === 'string') {
-                const apiError = new Error(json.error) as Error & { code?: string };
-                if (typeof json.code === 'string') {
-                    apiError.code = json.code;
-                }
-                throw apiError;
-            }
-            throw new Error('Failed to shorten URL. Please try again.');
-        }
-
-        if (!isApiRouteResponseOf(json, isCreatedLinkResponse)) {
-            throw new Error('Unexpected response from server.');
-        }
-
-        if (!json.success) {
-            throw new Error(json.error || 'Failed to shorten URL. Please try again.');
-        }
-
-        setShortUrl(json.data.shortUrl);
-        setUrl('');
-        setCopied(false);
-    }
+    const { spinnerVisible, showSpinner, hideSpinner } = useMinDurationSpinner();
 
     const handleShorten = (e: React.SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
         e.preventDefault();
         setError(null);
-        setShortUrl('');
-        setCopied(false);
+
+        if (isRateLimited) return;
 
         const trimmed = url.trim();
-
         if (!trimmed) {
             setError({ message: 'Please enter a URL' });
             return;
         }
 
-        startTransition(() => {
-            shortenUrl(trimmed).catch((err: unknown) => {
+        showSpinner();
+        setIsSubmitting(true);
+
+        shortenUrl(trimmed)
+            .then((result) => {
+                setShortUrl(result);
+                setUrl('');
+            })
+            .catch((err: unknown) => {
                 console.error(err);
-                const known = err as { message?: unknown; code?: unknown };
-                const nextError = {
-                    message:
-                        typeof known.message === 'string' && known.message
-                            ? known.message
-                            : 'Failed to shorten URL. Please try again.',
-                    code: typeof known.code === 'string' ? known.code : undefined,
-                };
+                const nextError = toShortenError(err);
 
                 if (nextError.code === 'QUOTA_EXCEEDED') {
-                    toast.custom(
-                        (id) => (
-                            <div className="relative w-full rounded-xl border border-border bg-popover/90 p-5 text-popover-foreground shadow-2xl backdrop-blur-md">
-                                <button
-                                    type="button"
-                                    aria-label="Close alert"
-                                    className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
-                                    onClick={() => toast.dismiss(id)}
-                                >
-                                    <X className="h-4 w-4" />
-                                </button>
+                    showQuotaExceededToast(nextError);
+                    setError(null);
+                    return;
+                }
 
-                                <div className="flex items-start gap-3 pr-8">
-                                    <div className="mt-0.5 rounded-full bg-primary/10 p-2">
-                                        <Bell className="h-4 w-4 text-primary" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="text-sm font-semibold">Anonymous limit reached</p>
-                                        <p className="mt-1 text-sm text-muted-foreground">{nextError.message}</p>
-                                        <div className="mt-3 flex flex-wrap gap-2">
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                onClick={() => {
-                                                    toast.dismiss(id);
-                                                    window.location.assign('/signup');
-                                                }}
-                                            >
-                                                Sign up
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => {
-                                                    toast.dismiss(id);
-                                                    window.location.assign('/signin');
-                                                }}
-                                            >
-                                                Sign in
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ),
-                        {
-                            id: 'quota-exceeded',
-                            duration: Infinity,
-                            className: 'quota-toast !border-0 !bg-transparent !shadow-none !p-0 !m-0',
-                            style: {
-                                position: 'fixed',
-                                left: '50%',
-                                right: 'auto',
-                                bottom: '20px',
-                                top: 'auto',
-                                transform: 'translateX(-50%)',
-                                width: 'min(92vw, 760px)',
-                                maxWidth: '760px',
-                                margin: 0,
-                                zIndex: 100,
-                            },
-                        }
-                    );
+                if (nextError.code === 'RATE_LIMITED') {
+                    startCooldown(nextError.retryAfterSec);
+                    showRateLimitToast(nextError);
                     setError(null);
                     return;
                 }
 
                 setError(nextError);
+            })
+            .finally(() => {
+                setIsSubmitting(false);
+                hideSpinner();
             });
-        });
-    };
-
-    const handleCopy = async () => {
-        try {
-            await navigator.clipboard.writeText(shortUrl);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        } catch (err) {
-            console.error('Failed to copy:', err);
-        }
     };
 
     return (
-        <div className="w-full max-w-2xl mx-auto mt-10">
-            {/* FORM */}
+        <div className="mx-auto mt-10 w-full max-w-2xl px-4 sm:px-0">
             <form
                 onSubmit={handleShorten}
-                className="bg-background/70 backdrop-blur-lg shadow-xl rounded-2xl p-6 border border-border/40 space-y-4 animate-fade-in"
+                className="animate-fade-in space-y-4 rounded-2xl border border-border/40 bg-background/70 p-4 shadow-xl backdrop-blur-lg sm:p-6"
             >
-                <div className="flex items-center gap-3 p-2 bg-accent/30 rounded-xl border border-border/50">
-                    <Link2 className="h-5 w-5 text-muted-foreground ml-2" />
-
-                    <Input
-                        type="text"
-                        value={url}
-                        onChange={(e) => setUrl(e.target.value)}
-                        placeholder="Enter your long URL here..."
-                        disabled={isPending}
-                        className="flex-1 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none shadow-none text-base"
-                    />
-
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 sm:rounded-xl sm:border sm:border-border/50 sm:bg-accent/30 sm:p-2">
+                    <div className="flex h-11 w-full items-center gap-2 rounded-lg border border-border/40 bg-background/50 px-3">
+                        <Link2 className="h-5 w-5 shrink-0 text-muted-foreground" />
+                        <Input
+                            type="text"
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            placeholder="Enter your long URL here..."
+                            disabled={isSubmitting}
+                            className="h-full flex-1 border-none bg-transparent px-2 text-base placeholder:text-sm sm:placeholder:text-base shadow-none focus-visible:ring-0"
+                        />
+                    </div>
                     <Button
                         type="submit"
-                        disabled={isPending}
-                        className="px-6 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 disabled:opacity-60"
+                        disabled={isSubmitting || isRateLimited}
+                        className="h-10 w-full shrink-0 rounded-xl bg-primary px-6 py-1.5 text-primary-foreground transition-all duration-200 hover:bg-primary/90 disabled:opacity-60 sm:h-9 sm:w-auto"
                     >
-                        {isPending ? (
-                            <span className="flex items-center justify-center gap-2">
-                                <Loader2 className="animate-spin h-5 w-5" />
-                                Shortening...
+                        {spinnerVisible ? (
+                            <span className="flex items-center gap-2">
+                                <Loader2 className="animate-spin h-5 w-5" /> Shortening...
                             </span>
+                        ) : isRateLimited ? (
+                            `Retry in ${rateLimitRemainingSec}s`
                         ) : (
                             'Shorten'
                         )}
                     </Button>
                 </div>
-
-                {error?.code !== 'QUOTA_EXCEEDED' && error ? (
+                {error && error.code !== 'QUOTA_EXCEEDED' && (
                     <p className="text-sm text-destructive mt-1">{error.message}</p>
-                ) : null}
+                )}
             </form>
 
-            {shortUrl && !error && (
-                <Card
-                    key={shortUrl}
-                    className="mt-6 border-border/40 bg-background/60 backdrop-blur-lg shadow-xl rounded-2xl animate-fade-in"
-                >
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Your shortened URL</CardTitle>
-                        <CardDescription className="text-xs">
-                            Share this link and track its performance from your dashboard.
-                        </CardDescription>
-                    </CardHeader>
-
-                    <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <Input
-                            type="text"
-                            readOnly
-                            value={shortUrl}
-                            className="flex-1 font-medium bg-background/60 text-primary border border-border/50"
-                        />
-
-                        <Button
-                            type="button"
-                            onClick={handleCopy}
-                            className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-4 py-2"
-                        >
-                            {copied ? (
-                                <>
-                                    <Check className="h-4 w-4" />
-                                    Copied!
-                                </>
-                            ) : (
-                                <>
-                                    <Copy className="h-4 w-4" />
-                                    Copy
-                                </>
-                            )}
-                        </Button>
-                    </CardContent>
-                </Card>
-            )}
+            {shortUrl && !error && <ShortenedUrlCard shortUrl={shortUrl} />}
         </div>
     );
 }
