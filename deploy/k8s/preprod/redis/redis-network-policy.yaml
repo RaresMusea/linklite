@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-ingress-only-from-app
+  namespace: linklite-preprod
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: linklite-redis
+      app.kubernetes.io/component: rate-limiter
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: linklite
+              app.kubernetes.io/component: app
+              app.kubernetes.io/environment: preprod
+      ports:
+        - protocol: TCP
+          port: 6379
