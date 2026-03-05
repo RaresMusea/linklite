@@ -106,6 +106,12 @@ kubectl apply -f ${MANIFESTS_DIR}/app-deployment.yaml
 kubectl apply -f ${MANIFESTS_DIR}/domain-enrichment-worker-deployment.yaml
 kubectl apply -f ${MANIFESTS_DIR}/link-enrichment-worker-deployment.yaml
 
+# ----------------------------------------------------------------
+# Apply network policies
+# ----------------------------------------------------------------
+
+kubectl apply -f ${MANIFESTS_DIR}/redis/redis-network-policy.yaml
+
 # ------------------------------------------------------------
 # Migrations Job
 # ------------------------------------------------------------
