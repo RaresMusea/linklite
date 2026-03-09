@@ -50,6 +50,7 @@
         "zod": "^4.1.13"
     },
     "devDependencies": {
+        "@better-auth/prisma-adapter": "^1.5.4",
         "@tailwindcss/postcss": "^4.1.18",
         "@testing-library/jest-dom": "^6.9.1",
         "@types/node": "^20.19.26",
