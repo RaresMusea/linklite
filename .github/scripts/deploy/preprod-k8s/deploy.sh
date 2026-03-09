@@ -51,6 +51,12 @@ PRISMA_CLIENT_ENGINE_TYPE="$(getp PRISMA_CLIENT_ENGINE_TYPE)"
 APP_COMMIT_SHA="${IMAGE_TAG#testing-}"
 IP_HASH_SALT="$(getp IP_HASH_SALT)"
 REDIS_PASSWORD="$(getp REDIS_PASSWORD)"
+BETTER_AUTH_SECRET="$(getp BETTER_AUTH_SECRET)"
+SMTP_HOST="$(getp SMTP_HOST)"
+SMTP_USER="$(getp SMTP_USER)"
+SMTP_PASSWORD="$(getp SMTP_PASSWORD)"
+SMTP_PORT="$(getp SMTP_PORT)"
+
 REDIS_URL="redis://:${REDIS_PASSWORD}@linklite-redis:6379"
 
 DB_HOST="db"
@@ -75,6 +81,11 @@ kubectl -n "${NAMESPACE}" create secret generic linklite-secrets \
   --from-literal=APP_VERSION="${IMAGE_TAG}" \
   --from-literal=IP_HASH_SALT="${IP_HASH_SALT}" \
   --from-literal=REDIS_URL="${REDIS_URL}" \
+  --from-literal=BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET}" \
+  --from-literal=SMTP_HOST="${SMTP_HOST}" \
+  --from-literal=SMTP_USER="${SMTP_USER}" \
+  --from-literal=SMTP_PASSWORD="${SMTP_PASSWORD}" \
+  --from-literal=SMTP_PORT="${SMTP_PORT}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "Secrets synced."
@@ -105,6 +116,12 @@ kubectl apply -f ${MANIFESTS_DIR}/ingress.yaml
 kubectl apply -f ${MANIFESTS_DIR}/app-deployment.yaml
 kubectl apply -f ${MANIFESTS_DIR}/domain-enrichment-worker-deployment.yaml
 kubectl apply -f ${MANIFESTS_DIR}/link-enrichment-worker-deployment.yaml
+
+# ----------------------------------------------------------------
+# Apply network policies
+# ----------------------------------------------------------------
+
+kubectl apply -f ${MANIFESTS_DIR}/redis/redis-network-policy.yaml
 
 # ------------------------------------------------------------
 # Migrations Job
