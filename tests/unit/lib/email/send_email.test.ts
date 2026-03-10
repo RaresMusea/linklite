@@ -144,7 +144,7 @@ describe('sendEmail tests', () => {
         });
     });
 
-    it('Logs an error when SES send fails', async () => {
+    it('Throws after logging when SES send fails', async () => {
         process.env.EMAIL_FROM = 'noreply@linklite.dev';
         const sesError = new Error('SES unavailable');
         sendMock.mockRejectedValue(sesError);
@@ -155,7 +155,7 @@ describe('sendEmail tests', () => {
                 subject: 'Hello',
                 html: '<p>Hello</p>',
             }),
-        ).resolves.toBeUndefined();
+        ).rejects.toThrow('SES unavailable');
 
         expect(errorMock).toHaveBeenCalledWith(
             'An error occurred while attempting to sent email to user@test.com',

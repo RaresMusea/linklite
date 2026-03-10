@@ -57,5 +57,6 @@ export async function sendEmail({ to, subject, html, text }: SendEmailInput) {
         });
     } catch (err) {
         emailLogger.error(`An error occurred while attempting to sent email to ${to}`, { err });
+        throw err;
     }
 }
