@@ -18,6 +18,7 @@ describe('Password reset template tests', () => {
 
         expect(template.html).toContain('src="https://preprod.linklite.dev/linklite.svg"');
         expect(template.html).toContain('<span style="color:#111111;">Link</span><span style="color:#ff7a00;">Lite</span>');
+        expect(template.html).toContain('background:oklch(0.646 0.222 41.116)');
     });
 
     it('Escapes user-provided values in html output', () => {

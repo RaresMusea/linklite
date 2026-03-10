@@ -4,6 +4,7 @@ type ResetPasswordTemplateParams = {
 };
 
 export function resetPasswordTemplate({ name, resetUrl }: ResetPasswordTemplateParams) {
+    const primaryColor = 'oklch(0.646 0.222 41.116)';
     const greeting = name ? `Hi ${name},` : 'Hello!';
     const safeGreeting = escapeHtml(greeting);
     const safeResetUrl = escapeHtml(resetUrl);
@@ -45,16 +46,21 @@ export function resetPasswordTemplate({ name, resetUrl }: ResetPasswordTemplateP
           <div style="margin:0 0 16px 0;">
             <a
               href="${safeResetUrl}"
-              style="display:inline-block;padding:12px 18px;border-radius:10px;text-decoration:none;background:#ff7a00;color:#ffffff;font-weight:700;"
+              style="display:inline-block;padding:12px 18px;border-radius:10px;text-decoration:none;background:#e66d00;background:${primaryColor};color:#ffffff;font-weight:700;"
             >
               Reset password
             </a>
           </div>
 
-          <p style="margin:0 0 8px 0;color:#4b5563;">If the button does not work, use this link:</p>
-          <p style="margin:0 0 16px 0;">
-            <a href="${safeResetUrl}" style="color:#ff7a00;word-break:break-word;">${safeResetUrl}</a>
-          </p>
+          <p style="margin:0 0 8px 0;color:#4b5563;">If needed, you can also use this backup button:</p>
+          <div style="margin:0 0 16px 0;">
+            <a
+              href="${safeResetUrl}"
+              style="display:inline-block;padding:10px 14px;border-radius:10px;text-decoration:none;background:#e66d00;background:${primaryColor};color:#ffffff;font-weight:700;"
+            >
+              Open reset link
+            </a>
+          </div>
           <p style="margin:0;color:#4b5563;">If you did not request this, you can safely ignore this email.</p>
         </div>
       </div>
