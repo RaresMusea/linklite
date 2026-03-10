@@ -8,14 +8,14 @@ describe('Email template common helpers', () => {
 
     it('Builds logo URL from source URL origin', () => {
         const sourceUrl = 'https://preprod.linklite.dev/path?q=1';
-        expect(getBrandLogoUrl(sourceUrl)).toBe('https://preprod.linklite.dev/linklite.svg');
+        expect(getBrandLogoUrl(sourceUrl)).toBe('https://preprod.linklite.dev/apple-touch-icon.png');
     });
 
     it('Falls back to NEXT_PUBLIC_APP_URL when source URL is invalid', () => {
         const original = process.env.NEXT_PUBLIC_APP_URL;
         try {
             process.env.NEXT_PUBLIC_APP_URL = 'https://linklite.dev';
-            expect(getBrandLogoUrl('not-a-valid-url')).toBe('https://linklite.dev/linklite.svg');
+            expect(getBrandLogoUrl('not-a-valid-url')).toBe('https://linklite.dev/apple-touch-icon.png');
         } finally {
             if (original === undefined) {
                 delete process.env.NEXT_PUBLIC_APP_URL;
@@ -25,16 +25,37 @@ describe('Email template common helpers', () => {
         }
     });
 
-    it('Returns empty string when source URL is invalid and fallback is missing', () => {
+    it('Falls back to preprod asset URL when no valid public fallback exists', () => {
         const original = process.env.NEXT_PUBLIC_APP_URL;
+        const originalAssets = process.env.EMAIL_ASSETS_BASE_URL;
         try {
             delete process.env.NEXT_PUBLIC_APP_URL;
-            expect(getBrandLogoUrl('not-a-valid-url')).toBe('');
+            delete process.env.EMAIL_ASSETS_BASE_URL;
+            expect(getBrandLogoUrl('not-a-valid-url')).toBe('https://preprod.linklite.dev/apple-touch-icon.png');
         } finally {
             if (original === undefined) {
                 delete process.env.NEXT_PUBLIC_APP_URL;
             } else {
                 process.env.NEXT_PUBLIC_APP_URL = original;
+            }
+            if (originalAssets === undefined) {
+                delete process.env.EMAIL_ASSETS_BASE_URL;
+            } else {
+                process.env.EMAIL_ASSETS_BASE_URL = originalAssets;
+            }
+        }
+    });
+
+    it('Uses EMAIL_ASSETS_BASE_URL over other sources when present', () => {
+        const originalAssets = process.env.EMAIL_ASSETS_BASE_URL;
+        try {
+            process.env.EMAIL_ASSETS_BASE_URL = 'https://assets.linklite.dev';
+            expect(getBrandLogoUrl('http://localhost:3001/verify-email')).toBe('https://assets.linklite.dev/linklite.png');
+        } finally {
+            if (originalAssets === undefined) {
+                delete process.env.EMAIL_ASSETS_BASE_URL;
+            } else {
+                process.env.EMAIL_ASSETS_BASE_URL = originalAssets;
             }
         }
     });
