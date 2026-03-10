@@ -1,29 +1,29 @@
 import { escapeHtml, getBrandLogoUrl } from '@/lib/email/templates/common';
 
-type ResetPasswordTemplateParams = {
+type AccountVerificationTemplateParams = {
     name?: string | null;
-    resetUrl: string;
+    verificationUrl: string;
 };
 
-export function resetPasswordTemplate({ name, resetUrl }: ResetPasswordTemplateParams) {
+export function accountVerificationTemplate({ name, verificationUrl }: AccountVerificationTemplateParams) {
     const primaryColor = 'oklch(0.646 0.222 41.116)';
     const greeting = name ? `Hi ${name},` : 'Hello!';
     const safeGreeting = escapeHtml(greeting);
-    const safeResetUrl = escapeHtml(resetUrl);
-    const logoUrl = escapeHtml(getBrandLogoUrl(resetUrl));
+    const safeVerificationUrl = escapeHtml(verificationUrl);
+    const logoUrl = escapeHtml(getBrandLogoUrl(verificationUrl));
 
     return {
-        subject: 'Reset your LinkLite password',
+        subject: 'Verify your LinkLite account',
         text: [
             'LinkLite',
             '',
             greeting,
             '',
-            'We received a request to reset your password.',
-            'Use the link below to set a new password:',
-            resetUrl,
+            'Thanks for creating your LinkLite account.',
+            'Please verify your email address by using the button below:',
+            verificationUrl,
             '',
-            'If you did not request this, you can safely ignore this email.',
+            'If you did not create this account, you can safely ignore this email.',
         ].join('\n'),
         html: `
       <div style="background:#f6f6f8;padding:24px 12px;">
@@ -41,29 +41,19 @@ export function resetPasswordTemplate({ name, resetUrl }: ResetPasswordTemplateP
             </span>
           </div>
 
-          <h2 style="margin:0 0 10px 0;font-size:24px;line-height:1.2;color:#111111;">Reset your password</h2>
+          <h2 style="margin:0 0 10px 0;font-size:24px;line-height:1.2;color:#111111;">Verify your email address</h2>
           <p style="margin:0 0 10px 0;">${safeGreeting}</p>
-          <p style="margin:0 0 16px 0;">We received a request to reset your password.</p>
+          <p style="margin:0 0 16px 0;">Thanks for creating your LinkLite account.</p>
 
           <div style="margin:0 0 16px 0;">
             <a
-              href="${safeResetUrl}"
+              href="${safeVerificationUrl}"
               style="display:inline-block;padding:12px 18px;border-radius:10px;text-decoration:none;background:#e66d00;background:${primaryColor};color:#ffffff;font-weight:700;"
             >
-              Reset password
+              Verify email
             </a>
           </div>
-
-          <p style="margin:0 0 8px 0;color:#4b5563;">If needed, you can also use this backup button:</p>
-          <div style="margin:0 0 16px 0;">
-            <a
-              href="${safeResetUrl}"
-              style="display:inline-block;padding:10px 14px;border-radius:10px;text-decoration:none;background:#e66d00;background:${primaryColor};color:#ffffff;font-weight:700;"
-            >
-              Open reset link
-            </a>
-          </div>
-          <p style="margin:0;color:#4b5563;">If you did not request this, you can safely ignore this email.</p>
+          <p style="margin:0;color:#4b5563;">If you did not create this account, you can safely ignore this email.</p>
         </div>
       </div>
     `,

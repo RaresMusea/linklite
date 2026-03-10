@@ -1,0 +1,52 @@
+import { describe, it, expect } from 'vitest';
+import { accountVerificationTemplate } from '@/lib/email/templates/account_verification';
+
+describe('Account verification template tests', () => {
+    it('Returns branded subject and plain-text body', () => {
+        const verificationUrl = 'https://app.linklite.dev/verify-email/token-123';
+        const template = accountVerificationTemplate({ name: 'Rares', verificationUrl });
+
+        expect(template.subject).toBe('Verify your LinkLite account');
+        expect(template.text).toContain('LinkLite');
+        expect(template.text).toContain('Hi Rares,');
+        expect(template.text).toContain(verificationUrl);
+    });
+
+    it('Uses verification URL origin for the brand logo in html', () => {
+        const verificationUrl = 'https://preprod.linklite.dev/verify-email/token-123?x=1';
+        const template = accountVerificationTemplate({ verificationUrl });
+
+        expect(template.html).toContain('src="https://preprod.linklite.dev/linklite.svg"');
+        expect(template.html).toContain('<span style="color:#111111;">Link</span><span style="color:#ff7a00;">Lite</span>');
+        expect(template.html).toContain('background:oklch(0.646 0.222 41.116)');
+    });
+
+    it('Escapes user-provided values in html output', () => {
+        const template = accountVerificationTemplate({
+            name: '<b>"Rares"</b>',
+            verificationUrl: 'https://app.linklite.dev/verify?next=<script>alert(1)</script>&a="x"',
+        });
+
+        expect(template.html).toContain('Hi &lt;b&gt;&quot;Rares&quot;&lt;/b&gt;,');
+        expect(template.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+        expect(template.html).toContain('&quot;x&quot;');
+        expect(template.html).not.toContain('<script>alert(1)</script>');
+    });
+
+    it('Falls back to NEXT_PUBLIC_APP_URL for logo when verification URL is invalid', () => {
+        const original = process.env.NEXT_PUBLIC_APP_URL;
+        try {
+            process.env.NEXT_PUBLIC_APP_URL = 'https://linklite.dev';
+
+            const template = accountVerificationTemplate({ verificationUrl: 'not-a-valid-url' });
+
+            expect(template.html).toContain('src="https://linklite.dev/linklite.svg"');
+        } finally {
+            if (original === undefined) {
+                delete process.env.NEXT_PUBLIC_APP_URL;
+            } else {
+                process.env.NEXT_PUBLIC_APP_URL = original;
+            }
+        }
+    });
+});
