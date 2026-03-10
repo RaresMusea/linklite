@@ -10,4 +10,4 @@ data:
   RATE_LIMIT_MAX_REQUESTS: "10"
   RATE_LIMIT_WINDOW_SECONDS: "60"
   REDIS_FAIL_STRATEGY: "failOpen"
-  BETTER_AUTH_URL=http: https://preprod.linklite.dev
+  BETTER_AUTH_URL: https://preprod.linklite.dev
