@@ -16,7 +16,7 @@ describe('Password reset template tests', () => {
         const resetUrl = 'https://preprod.linklite.dev/reset-password/token-123?x=1';
         const template = resetPasswordTemplate({ resetUrl });
 
-        expect(template.html).toContain('src="https://preprod.linklite.dev/linklite.svg"');
+        expect(template.html).toContain('src="https://preprod.linklite.dev/apple-touch-icon.png"');
         expect(template.html).toContain('<span style="color:#111111;">Link</span><span style="color:#ff7a00;">Lite</span>');
         expect(template.html).toContain('background:oklch(0.646 0.222 41.116)');
     });
@@ -40,7 +40,7 @@ describe('Password reset template tests', () => {
 
             const template = resetPasswordTemplate({ resetUrl: 'not-a-valid-url' });
 
-            expect(template.html).toContain('src="https://linklite.dev/linklite.svg"');
+            expect(template.html).toContain('src="https://linklite.dev/apple-touch-icon.png"');
         } finally {
             if (original === undefined) {
                 delete process.env.NEXT_PUBLIC_APP_URL;
