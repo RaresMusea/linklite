@@ -56,6 +56,7 @@ SMTP_HOST="$(getp SMTP_HOST)"
 SMTP_USER="$(getp SMTP_USER)"
 SMTP_PASSWORD="$(getp SMTP_PASSWORD)"
 SMTP_PORT="$(getp SMTP_PORT)"
+EMAIL_FROM="$(getp EMAIL_FROM)"
 
 REDIS_URL="redis://:${REDIS_PASSWORD}@linklite-redis:6379"
 
@@ -86,6 +87,8 @@ kubectl -n "${NAMESPACE}" create secret generic linklite-secrets \
   --from-literal=SMTP_USER="${SMTP_USER}" \
   --from-literal=SMTP_PASSWORD="${SMTP_PASSWORD}" \
   --from-literal=SMTP_PORT="${SMTP_PORT}" \
+  --from-literal=EMAIL_FROM="${EMAIL_FROM}" \
+  --from-literal=AWS_REGION="${AWS_REGION}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "Secrets synced."
