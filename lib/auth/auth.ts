@@ -3,6 +3,7 @@ import { prismaAdapter } from '@better-auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import { accountVerificationTemplate } from '@/lib/email/templates/account_verification';
 import { sendEmail } from '@/lib/email/send_email';
+import { resetPasswordTemplate } from '@/lib/email/templates/reset_password';
 
 const isProd = process.env.NODE_ENV === 'production'; // TODO move this logic to shared lib
 
@@ -17,6 +18,19 @@ export const auth = betterAuth({
 
     emailAndPassword: {
         enabled: true,
+        sendResetPassword: async ({ user, url }) => {
+            const template = resetPasswordTemplate({
+                name: user.name,
+                resetUrl: url,
+            });
+
+            await sendEmail({
+                to: user.email,
+                subject: template.subject,
+                html: template.html,
+                text: template.text,
+            });
+        },
     },
     emailVerification: {
         sendOnSignUp: true,

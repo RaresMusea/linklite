@@ -18,7 +18,8 @@ describe('Password reset template tests', () => {
 
         expect(template.html).toContain('src="https://preprod.linklite.dev/apple-touch-icon.png"');
         expect(template.html).toContain('<span style="color:#111111;">Link</span><span style="color:#ff7a00;">Lite</span>');
-        expect(template.html).toContain('background:oklch(0.646 0.222 41.116)');
+        expect(template.html).toContain('bgcolor="#f97316"');
+        expect(template.html).toContain('<table role="presentation"');
     });
 
     it('Escapes user-provided values in html output', () => {

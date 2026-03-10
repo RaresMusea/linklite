@@ -6,7 +6,7 @@ type ResetPasswordTemplateParams = {
 };
 
 export function resetPasswordTemplate({ name, resetUrl }: ResetPasswordTemplateParams) {
-    const primaryColor = 'oklch(0.646 0.222 41.116)';
+    const primaryColor = '#f97316';
     const greeting = name ? `Hi ${name},` : 'Hello!';
     const safeGreeting = escapeHtml(greeting);
     const safeResetUrl = escapeHtml(resetUrl);
@@ -45,24 +45,19 @@ export function resetPasswordTemplate({ name, resetUrl }: ResetPasswordTemplateP
           <p style="margin:0 0 10px 0;">${safeGreeting}</p>
           <p style="margin:0 0 16px 0;">We received a request to reset your password.</p>
 
-          <div style="margin:0 0 16px 0;">
-            <a
-              href="${safeResetUrl}"
-              style="display:inline-block;padding:12px 18px;border-radius:10px;text-decoration:none;background:#e66d00;background:${primaryColor};color:#ffffff;font-weight:700;"
-            >
-              Reset password
-            </a>
-          </div>
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px 0;">
+            <tr>
+              <td bgcolor="${primaryColor}" style="border-radius:10px;">
+                <a
+                  href="${safeResetUrl}"
+                  style="display:inline-block;padding:12px 18px;border-radius:10px;text-decoration:none;color:#ffffff;font-weight:700;"
+                >
+                  Reset password
+                </a>
+              </td>
+            </tr>
+          </table>
 
-          <p style="margin:0 0 8px 0;color:#4b5563;">If needed, you can also use this backup button:</p>
-          <div style="margin:0 0 16px 0;">
-            <a
-              href="${safeResetUrl}"
-              style="display:inline-block;padding:10px 14px;border-radius:10px;text-decoration:none;background:#e66d00;background:${primaryColor};color:#ffffff;font-weight:700;"
-            >
-              Open reset link
-            </a>
-          </div>
           <p style="margin:0;color:#4b5563;">If you did not request this, you can safely ignore this email.</p>
         </div>
       </div>
