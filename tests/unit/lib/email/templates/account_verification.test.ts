@@ -16,9 +16,10 @@ describe('Account verification template tests', () => {
         const verificationUrl = 'https://preprod.linklite.dev/verify-email/token-123?x=1';
         const template = accountVerificationTemplate({ verificationUrl });
 
-        expect(template.html).toContain('src="https://preprod.linklite.dev/linklite.svg"');
+        expect(template.html).toContain('src="https://preprod.linklite.dev/apple-touch-icon.png"');
         expect(template.html).toContain('<span style="color:#111111;">Link</span><span style="color:#ff7a00;">Lite</span>');
-        expect(template.html).toContain('background:oklch(0.646 0.222 41.116)');
+        expect(template.html).toContain('bgcolor="#f97316"');
+        expect(template.html).toContain('<table role="presentation"');
     });
 
     it('Escapes user-provided values in html output', () => {
@@ -40,7 +41,7 @@ describe('Account verification template tests', () => {
 
             const template = accountVerificationTemplate({ verificationUrl: 'not-a-valid-url' });
 
-            expect(template.html).toContain('src="https://linklite.dev/linklite.svg"');
+            expect(template.html).toContain('src="https://linklite.dev/apple-touch-icon.png"');
         } finally {
             if (original === undefined) {
                 delete process.env.NEXT_PUBLIC_APP_URL;

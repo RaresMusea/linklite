@@ -6,7 +6,7 @@ type AccountVerificationTemplateParams = {
 };
 
 export function accountVerificationTemplate({ name, verificationUrl }: AccountVerificationTemplateParams) {
-    const primaryColor = 'oklch(0.646 0.222 41.116)';
+    const primaryColor = '#f97316';
     const greeting = name ? `Hi ${name},` : 'Hello!';
     const safeGreeting = escapeHtml(greeting);
     const safeVerificationUrl = escapeHtml(verificationUrl);
@@ -45,14 +45,18 @@ export function accountVerificationTemplate({ name, verificationUrl }: AccountVe
           <p style="margin:0 0 10px 0;">${safeGreeting}</p>
           <p style="margin:0 0 16px 0;">Thanks for creating your LinkLite account.</p>
 
-          <div style="margin:0 0 16px 0;">
-            <a
-              href="${safeVerificationUrl}"
-              style="display:inline-block;padding:12px 18px;border-radius:10px;text-decoration:none;background:#e66d00;background:${primaryColor};color:#ffffff;font-weight:700;"
-            >
-              Verify email
-            </a>
-          </div>
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px 0;">
+            <tr>
+              <td bgcolor="${primaryColor}" style="border-radius:10px;">
+                <a
+                  href="${safeVerificationUrl}"
+                  style="display:inline-block;padding:12px 18px;border-radius:10px;text-decoration:none;color:#ffffff;font-weight:700;"
+                >
+                  Verify email
+                </a>
+              </td>
+            </tr>
+          </table>
           <p style="margin:0;color:#4b5563;">If you did not create this account, you can safely ignore this email.</p>
         </div>
       </div>
