@@ -30,6 +30,7 @@ concurrency:
 
 env:
   DATABASE_URL: ${{secrets.DATABASE_URL}}
+  NODE_VERSION: "24"
 
 
 jobs:
@@ -93,7 +94,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies
@@ -129,7 +130,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies (uses cache)
@@ -178,7 +179,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies (uses cache)
@@ -254,7 +255,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies (uses cache)
@@ -386,7 +387,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies (uses cache)
@@ -465,7 +466,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies (uses cache)
