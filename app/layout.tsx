@@ -1,10 +1,8 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import { Header } from '@/components/specific/landing/Header';
 import React from 'react';
 import { ThemeProvider } from 'next-themes';
-import { Footer } from '@/components/shared/footer/Footer';
 import { Toaster } from '@/components/ui/sonner';
 
 const geistSans = Geist({
@@ -38,9 +36,7 @@ export default function RootLayout({
         <html lang="en" suppressHydrationWarning className="scroll-smooth">
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-                    <Header />
                     {children}
-                    <Footer />
                     <Toaster position="bottom-center" expand={false} />
                 </ThemeProvider>
             </body>
