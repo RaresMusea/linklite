@@ -54,6 +54,7 @@
     },
     "devDependencies": {
         "@better-auth/prisma-adapter": "^1.5.4",
+        "@hookform/resolvers": "^5.2.2",
         "@tailwindcss/postcss": "^4.1.18",
         "@testing-library/jest-dom": "^6.9.1",
         "@types/node": "^20.19.26",
