@@ -47,7 +47,7 @@ describe('Register server action', () => {
             expect(result.fieldErrors?.name).toContain('Name is too short');
             expect(result.fieldErrors?.email).toContain('Invalid email address');
             expect(result.fieldErrors?.confirmPassword).toContain('Passwords do not match');
-            expect(result.fieldErrors?.terms).toContain('You must accept the terms and conditions.');
+            expect(result.fieldErrors?.terms).toContain('You must accept the terms and the privacy policy.');
         }
         expect(vi.mocked(auth.api.signUpEmail)).not.toHaveBeenCalled();
     });
