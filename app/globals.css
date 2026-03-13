@@ -226,6 +226,12 @@
 }
 
 @media (max-width: 767px) {
+    [data-sonner-toaster][data-x-position='right'] {
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+    }
+
     .quota-toast,
     .quota-toast:hover,
     .quota-toast:focus-within {
