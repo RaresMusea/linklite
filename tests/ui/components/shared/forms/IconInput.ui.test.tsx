@@ -15,6 +15,9 @@ describe('IconInput Component', () => {
         const icon = container.querySelector('svg');
         expect(icon).toBeInTheDocument();
         expect(icon).toHaveClass('pointer-events-none');
+        expect(icon).toHaveClass('absolute');
+        expect(icon).toHaveClass('left-3');
+        expect(icon).toHaveClass('-translate-y-1/2');
         expect(icon).toHaveClass('text-muted-foreground');
     });
 
@@ -58,5 +61,7 @@ describe('IconInput Component', () => {
         expect(input).toHaveClass('pl-10');
         expect(input).toHaveClass('text-sm');
         expect(input).toHaveClass('border-border/80');
+        expect(input).toHaveClass('placeholder:text-sm');
+        expect(input).toHaveClass('placeholder:text-muted-foreground/90');
     });
 });
