@@ -15,7 +15,7 @@ export const RegisterSchema = z
         confirmPassword: z.string(),
 
         terms: z.boolean().refine((value) => value, {
-            message: 'You must accept the terms and conditions.',
+            message: 'You must accept the terms and the privacy policy.',
         }),
     })
     .refine((data) => data.password === data.confirmPassword, {
@@ -23,4 +23,4 @@ export const RegisterSchema = z
         path: ['confirmPassword'],
     });
 
-export type RegisterFormValues = z.infer<typeof RegisterSchema>;
+export type RegistrationInput = z.infer<typeof RegisterSchema>;
