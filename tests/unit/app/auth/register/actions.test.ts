@@ -26,7 +26,7 @@ vi.mock('@/lib/logging/logger', () => ({
 }));
 
 import { auth } from '@/lib/auth/auth';
-import { register } from '@/app/(auth)/register/actions';
+import { signUp } from '@/app/(auth)/register/actions';
 
 describe('Register server action', () => {
     beforeEach(() => {
@@ -34,7 +34,7 @@ describe('Register server action', () => {
     });
 
     it('Returns field errors for invalid registration input', async () => {
-        const result = await register({
+        const result = await signUp({
             name: 'A',
             email: 'invalid-email',
             password: 'weak',
@@ -53,9 +53,20 @@ describe('Register server action', () => {
     });
 
     it('Registers user and returns success message when auth signup succeeds', async () => {
-        vi.mocked(auth.api.signUpEmail).mockResolvedValueOnce({});
+        vi.mocked(auth.api.signUpEmail).mockResolvedValueOnce({
+            token: null,
+            user: {
+                id: 'user_123',
+                createdAt: new Date('2026-01-01T00:00:00.000Z'),
+                updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+                email: 'jane@example.com',
+                emailVerified: false,
+                name: 'Jane Doe',
+                image: null,
+            },
+        });
 
-        const result = await register({
+        const result = await signUp({
             name: '  Jane Doe  ',
             email: 'JANE@EXAMPLE.COM',
             password: 'Strong_Ab',
@@ -81,7 +92,7 @@ describe('Register server action', () => {
     it('Returns form error when auth signup throws', async () => {
         vi.mocked(auth.api.signUpEmail).mockRejectedValueOnce(new Error('sign up failed'));
 
-        const result = await register({
+        const result = await signUp({
             name: 'Jane Doe',
             email: 'jane@example.com',
             password: 'Strong_Ab',

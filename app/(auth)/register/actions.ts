@@ -18,7 +18,7 @@ export type RegistrationResult =
           formError?: string;
       };
 
-export async function register(input: RegistrationInput): Promise<RegistrationResult> {
+export async function signUp(input: RegistrationInput): Promise<RegistrationResult> {
     const parsedInput = RegisterSchema.safeParse(input);
 
     if (!parsedInput.success) {
