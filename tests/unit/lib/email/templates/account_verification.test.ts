@@ -9,6 +9,7 @@ describe('Account verification template tests', () => {
         expect(template.subject).toBe('Verify your LinkLite account');
         expect(template.text).toContain('LinkLite');
         expect(template.text).toContain('Hi Rares,');
+        expect(template.text).toContain('Click the verification button below to verify your account:');
         expect(template.text).toContain(verificationUrl);
     });
 
@@ -20,6 +21,7 @@ describe('Account verification template tests', () => {
         expect(template.html).toContain('<span style="color:#111111;">Link</span><span style="color:#ff7a00;">Lite</span>');
         expect(template.html).toContain('bgcolor="#f97316"');
         expect(template.html).toContain('<table role="presentation"');
+        expect(template.html).toContain('Click the button below to verify your account and finish setting things up.');
     });
 
     it('Escapes user-provided values in html output', () => {
