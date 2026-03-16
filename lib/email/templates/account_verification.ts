@@ -20,7 +20,7 @@ export function accountVerificationTemplate({ name, verificationUrl }: AccountVe
             greeting,
             '',
             'Thanks for creating your LinkLite account.',
-            'Please verify your email address by using the button below:',
+            'Click the verification button below to verify your account:',
             verificationUrl,
             '',
             'If you did not create this account, you can safely ignore this email.',
@@ -44,6 +44,7 @@ export function accountVerificationTemplate({ name, verificationUrl }: AccountVe
           <h2 style="margin:0 0 10px 0;font-size:24px;line-height:1.2;color:#111111;">Verify your email address</h2>
           <p style="margin:0 0 10px 0;">${safeGreeting}</p>
           <p style="margin:0 0 16px 0;">Thanks for creating your LinkLite account.</p>
+          <p style="margin:0 0 16px 0;">Click the button below to verify your account and finish setting things up.</p>
 
           <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px 0;">
             <tr>

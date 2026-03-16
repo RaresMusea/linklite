@@ -12,6 +12,9 @@ const REGISTER_TOAST_OPTIONS = {
         '!w-[min(92vw,640px)] !max-w-[640px] !bg-popover/90 !text-popover-foreground !border-border/70 !backdrop-blur-md',
 };
 
+const REGISTER_SUCCESS_TOAST_CLASS =
+    '!w-[min(92vw,640px)] !max-w-[640px] register-success-toast !border !backdrop-blur-md';
+
 export function useRegistrationForm() {
     const {
         register,
@@ -64,6 +67,7 @@ export function useRegistrationForm() {
 
         toast.success(result.message, {
             ...REGISTER_TOAST_OPTIONS,
+            className: REGISTER_SUCCESS_TOAST_CLASS,
         });
     };
 

@@ -7,6 +7,19 @@ import { resetPasswordTemplate } from '@/lib/email/templates/reset_password';
 
 const isProd = process.env.NODE_ENV === 'production'; // TODO move this logic to shared lib
 
+function toTokenVerificationRoute(url: string): string {
+    try {
+        const parsedUrl = new URL(url);
+        const token = parsedUrl.searchParams.get('token');
+
+        if (!token) return url;
+
+        return `${parsedUrl.origin}/verify-email/${encodeURIComponent(token)}`;
+    } catch {
+        return url;
+    }
+}
+
 export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: 'postgresql',
@@ -37,7 +50,7 @@ export const auth = betterAuth({
         sendVerificationEmail: async ({ user, url }) => {
             const template = accountVerificationTemplate({
                 name: user.name,
-                verificationUrl: url,
+                verificationUrl: toTokenVerificationRoute(url),
             });
 
             await sendEmail({
