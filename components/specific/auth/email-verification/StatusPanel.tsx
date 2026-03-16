@@ -1,5 +1,3 @@
-'use client';
-
 import { ComponentType } from 'react';
 
 type StatusPanelProps = {
