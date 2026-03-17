@@ -55,6 +55,8 @@ BETTER_AUTH_SECRET="$(getp BETTER_AUTH_SECRET)"
 SMTP_HOST="$(getp SMTP_HOST)"
 EMAIL_FROM="$(getp EMAIL_FROM)"
 TRUSTED_ORIGINS="$(getp TRUSTED_ORIGINS)"
+GOOGLE_AUTH_CLIENT_ID="$(getp GOOGLE_AUTH_CLIENT_ID)"
+GOOGLE_AUTH_CLIENT_SECRET="$(getp GOOGLE_AUTH_CLIENT_SECRET)"
 
 REDIS_URL="redis://:${REDIS_PASSWORD}@linklite-redis:6379"
 
@@ -85,6 +87,8 @@ kubectl -n "${NAMESPACE}" create secret generic linklite-secrets \
   --from-literal=EMAIL_FROM="${EMAIL_FROM}" \
   --from-literal=AWS_REGION="${AWS_REGION}" \
   --from-literal=TRUSTED_ORIGINS="${TRUSTED_ORIGINS}" \
+  --from-literal=GOOGLE_AUTH_CLIENT_ID="${GOOGLE_AUTH_CLIENT_ID}" \
+  --from-literal=GOOGLE_AUTH_CLIENT_SECRET="${GOOGLE_AUTH_CLIENT_SECRET}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "Secrets synced."
