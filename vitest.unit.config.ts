@@ -9,7 +9,10 @@ const root = path.resolve(__dirname);
 export default defineConfig({
     root,
     resolve: {
-        alias: [{ find: /^@\//, replacement: `${root}/` }],
+        alias: [
+            { find: /^@\//, replacement: `${root}/` },
+            { find: /^server-only$/, replacement: `${root}/tests/mocks/server-only.ts` },
+        ],
     },
     test: {
         globals: true,
