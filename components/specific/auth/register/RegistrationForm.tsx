@@ -33,7 +33,6 @@ export function RegistrationForm() {
         >
             <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
                 <SocialAuthButtons
-                    mode="signup"
                     isGoogleSubmitting={isGoogleSubmitting}
                     isDisabled={isAnySubmitting}
                     onGoogleAuthAction={onGoogleAuth}

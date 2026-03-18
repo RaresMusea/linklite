@@ -71,18 +71,16 @@ vi.mock('@/components/specific/auth/social/hooks/useSocialAuth', () => ({
 
 vi.mock('@/components/specific/auth/social/SocialAuthButtons', () => ({
     SocialAuthButtons: ({
-        mode,
         isGoogleSubmitting,
         isDisabled,
         onGoogleAuthAction,
     }: {
-        mode: 'signin' | 'signup';
         isGoogleSubmitting: boolean;
         isDisabled?: boolean;
         onGoogleAuthAction: () => void;
     }) => (
         <button type="button" disabled={isDisabled} onClick={onGoogleAuthAction}>
-            {isGoogleSubmitting ? 'Continuing sign in...' : mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google'}
+            {isGoogleSubmitting ? 'Continuing with Google...' : 'Continue with Google'}
         </button>
     ),
 }));
@@ -124,7 +122,7 @@ describe('LoginForm Component', () => {
         expect(screen.getByText('Welcome back', { selector: 'p' })).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
         expect(screen.getByText('Sign in to manage your links and analytics.')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Sign in with Google' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
         expect(screen.getByLabelText('Email')).toBeInTheDocument();
         expect(screen.getByLabelText('Password')).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Register' })).toHaveAttribute('href', '/register');
@@ -151,13 +149,13 @@ describe('LoginForm Component', () => {
         render(<LoginForm />);
 
         expect(screen.getByRole('button', { name: /sign in$/i })).toBeDisabled();
-        expect(screen.getByRole('button', { name: /continuing sign in/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /continuing with google/i })).toBeDisabled();
     });
 
     it('Calls onGoogleAuth when Google button is clicked', () => {
         render(<LoginForm />);
 
-        fireEvent.click(screen.getByRole('button', { name: 'Sign in with Google' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
         expect(mocks.onGoogleAuth).toHaveBeenCalledTimes(1);
     });

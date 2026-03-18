@@ -31,7 +31,6 @@ export function LoginForm() {
         >
             <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
                 <SocialAuthButtons
-                    mode="signin"
                     isGoogleSubmitting={isGoogleSubmitting}
                     isDisabled={isAnySubmitting}
                     onGoogleAuthAction={onGoogleAuth}

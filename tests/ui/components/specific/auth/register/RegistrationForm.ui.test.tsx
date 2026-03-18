@@ -100,18 +100,16 @@ vi.mock('@/components/specific/auth/social/hooks/useSocialAuth', () => ({
 
 vi.mock('@/components/specific/auth/social/SocialAuthButtons', () => ({
     SocialAuthButtons: ({
-        mode,
         isGoogleSubmitting,
         isDisabled,
         onGoogleAuthAction,
     }: {
-        mode: 'signin' | 'signup';
         isGoogleSubmitting: boolean;
         isDisabled?: boolean;
         onGoogleAuthAction: () => void;
     }) => (
         <button type="button" disabled={isDisabled} onClick={onGoogleAuthAction}>
-            {isGoogleSubmitting ? 'Redirecting to Google...' : mode === 'signup' ? 'Sign up with Google' : 'Sign in with Google'}
+            {isGoogleSubmitting ? 'Continuing with Google...' : 'Continue with Google'}
         </button>
     ),
 }));
@@ -162,7 +160,7 @@ describe('RegistrationForm Component', () => {
         expect(screen.getByLabelText('Full name')).toBeInTheDocument();
         expect(screen.getByLabelText('Email')).toBeInTheDocument();
         expect(screen.getByLabelText('Password')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Sign up with Google' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/signin');
     });
 
@@ -215,13 +213,13 @@ describe('RegistrationForm Component', () => {
 
         render(<RegistrationForm />);
 
-        expect(screen.getByRole('button', { name: /redirecting to google/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /continuing with google/i })).toBeDisabled();
     });
 
     it('Calls onGoogleAuth when Google button is clicked', () => {
         render(<RegistrationForm />);
 
-        fireEvent.click(screen.getByRole('button', { name: 'Sign up with Google' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
         expect(mocks.onGoogleAuth).toHaveBeenCalledTimes(1);
     });
