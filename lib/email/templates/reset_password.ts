@@ -1,4 +1,4 @@
-import { escapeHtml, getBrandLogoUrl } from '@/lib/email/templates/common';
+import { escapeHtml, getBrandLogoUrl, getEmailFooterHtml, getEmailFooterText } from '@/lib/email/templates/common';
 
 type ResetPasswordTemplateParams = {
     name?: string | null;
@@ -11,6 +11,8 @@ export function resetPasswordTemplate({ name, resetUrl }: ResetPasswordTemplateP
     const safeGreeting = escapeHtml(greeting);
     const safeResetUrl = escapeHtml(resetUrl);
     const logoUrl = escapeHtml(getBrandLogoUrl(resetUrl));
+    const footerHtml = getEmailFooterHtml();
+    const footerText = getEmailFooterText();
 
     return {
         subject: 'Reset your LinkLite password',
@@ -24,6 +26,7 @@ export function resetPasswordTemplate({ name, resetUrl }: ResetPasswordTemplateP
             resetUrl,
             '',
             'If you did not request this, you can safely ignore this email.',
+            ...footerText,
         ].join('\n'),
         html: `
       <div style="background:#f6f6f8;padding:24px 12px;">
@@ -59,6 +62,7 @@ export function resetPasswordTemplate({ name, resetUrl }: ResetPasswordTemplateP
           </table>
 
           <p style="margin:0;color:#4b5563;">If you did not request this, you can safely ignore this email.</p>
+          ${footerHtml}
         </div>
       </div>
     `,

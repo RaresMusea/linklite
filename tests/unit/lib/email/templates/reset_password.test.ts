@@ -10,6 +10,8 @@ describe('Password reset template tests', () => {
         expect(template.text).toContain('LinkLite');
         expect(template.text).toContain('Hi Rares,');
         expect(template.text).toContain(resetUrl);
+        expect(template.text).toContain('Need help? Contact support@linklite.dev');
+        expect(template.text).toContain('Security issues: security@linklite.dev');
     });
 
     it('Uses reset URL origin for the brand logo in html', () => {
@@ -20,6 +22,8 @@ describe('Password reset template tests', () => {
         expect(template.html).toContain('<span style="color:#111111;">Link</span><span style="color:#ff7a00;">Lite</span>');
         expect(template.html).toContain('bgcolor="#f97316"');
         expect(template.html).toContain('<table role="presentation"');
+        expect(template.html).toContain('mailto:support@linklite.dev');
+        expect(template.html).toContain('mailto:security@linklite.dev');
     });
 
     it('Escapes user-provided values in html output', () => {

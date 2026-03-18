@@ -11,6 +11,8 @@ describe('Account verification template tests', () => {
         expect(template.text).toContain('Hi Rares,');
         expect(template.text).toContain('Click the verification button below to verify your account:');
         expect(template.text).toContain(verificationUrl);
+        expect(template.text).toContain('Need help? Contact support@linklite.dev');
+        expect(template.text).toContain('Security issues: security@linklite.dev');
     });
 
     it('Uses verification URL origin for the brand logo in html', () => {
@@ -22,6 +24,8 @@ describe('Account verification template tests', () => {
         expect(template.html).toContain('bgcolor="#f97316"');
         expect(template.html).toContain('<table role="presentation"');
         expect(template.html).toContain('Click the button below to verify your account and finish setting things up.');
+        expect(template.html).toContain('mailto:support@linklite.dev');
+        expect(template.html).toContain('mailto:security@linklite.dev');
     });
 
     it('Escapes user-provided values in html output', () => {
