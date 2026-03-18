@@ -1,9 +1,9 @@
 import React from 'react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 const mocks = vi.hoisted(() => ({
-    useRegistrationForm: vi.fn(),
+    useLoginForm: vi.fn(),
     useSocialAuth: vi.fn(),
     register: vi.fn((name: string) => ({
         name,
@@ -55,43 +55,14 @@ vi.mock('@/components/shared/forms/IconInput', () => ({
     IconInput: ({ id, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => <input id={id} {...props} />,
 }));
 
-vi.mock('@/components/ui/animate-checkbox', () => ({
-    Checkbox: ({
-        id,
-        checked,
-        onCheckedChange,
-        ...props
-    }: {
-        id?: string;
-        checked?: boolean;
-        onCheckedChange?: (checked: boolean) => void;
-    }) => (
-        <input
-            id={id}
-            type="checkbox"
-            checked={checked}
-            onChange={(e) => onCheckedChange?.(e.target.checked)}
-            {...props}
-        />
-    ),
-}));
-
 vi.mock('@/components/ui/button', () => ({
     Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
         <button {...props}>{children}</button>
     ),
 }));
 
-vi.mock('react-hook-form', () => ({
-    Controller: ({
-        render,
-    }: {
-        render: (args: { field: { value: boolean; onChange: (value: boolean) => void } }) => React.ReactNode;
-    }) => render({ field: { value: false, onChange: vi.fn() } }),
-}));
-
-vi.mock('@/components/specific/auth/register/hooks/useRegistrationForm', () => ({
-    useRegistrationForm: mocks.useRegistrationForm,
+vi.mock('@/components/specific/auth/login/hooks/useLoginForm', () => ({
+    useLoginForm: mocks.useLoginForm,
 }));
 
 vi.mock('@/components/specific/auth/social/hooks/useSocialAuth', () => ({
@@ -114,110 +85,75 @@ vi.mock('@/components/specific/auth/social/SocialAuthButtons', () => ({
     ),
 }));
 
-import { RegistrationForm } from '@/components/specific/auth/register/RegistrationForm';
+import { LoginForm } from '@/components/specific/auth/login/LoginForm';
 
-function makeHookState(
+function makeLoginHookState(
     overrides: Partial<{
         errors: {
-            name?: { message?: string };
             email?: { message?: string };
             password?: { message?: string };
-            confirmPassword?: { message?: string };
-            terms?: { message?: string };
         };
         isSubmitting: boolean;
-        passwordValue: string;
     }> = {}
 ) {
     return {
-        register: mocks.register,
-        control: {},
+        onSubmit: mocks.onSubmit,
+        handleSubmit: mocks.handleSubmit,
         errors: {},
         isSubmitting: false,
-        passwordValue: '',
-        handleSubmit: mocks.handleSubmit,
-        onSubmit: mocks.onSubmit,
+        register: mocks.register,
         ...overrides,
     };
 }
 
-describe('RegistrationForm Component', () => {
+describe('LoginForm Component', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mocks.useRegistrationForm.mockReturnValue(makeHookState());
+        mocks.useLoginForm.mockReturnValue(makeLoginHookState());
         mocks.useSocialAuth.mockReturnValue({
             isGoogleSubmitting: false,
             onGoogleAuth: mocks.onGoogleAuth,
         });
     });
 
-    it('Renders auth copy, base fields, and footer links', () => {
-        render(<RegistrationForm />);
+    it('Renders auth copy, fields, social button, and footer link', () => {
+        render(<LoginForm />);
 
-        expect(screen.getByText('Create account', { selector: 'p' })).toBeInTheDocument();
-        expect(screen.getByRole('heading', { name: 'Register' })).toBeInTheDocument();
-        expect(screen.getByText('Fill in your details and start using LinkLite.')).toBeInTheDocument();
-        expect(screen.getByLabelText('Full name')).toBeInTheDocument();
+        expect(screen.getByText('Welcome back', { selector: 'p' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+        expect(screen.getByText('Sign in to manage your links and analytics.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
         expect(screen.getByLabelText('Email')).toBeInTheDocument();
         expect(screen.getByLabelText('Password')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/signin');
-    });
-
-    it('Shows confirm password only when password has value', () => {
-        const { rerender } = render(<RegistrationForm />);
-        expect(screen.queryByLabelText('Confirm password')).not.toBeInTheDocument();
-
-        mocks.useRegistrationForm.mockReturnValue(
-            makeHookState({
-                passwordValue: 'Strong_Ab',
-            })
-        );
-        rerender(<RegistrationForm />);
-
-        expect(screen.getByPlaceholderText('Re-enter your password')).toBeInTheDocument();
-    });
-
-    it('Shows terms error when provided by hook state', () => {
-        mocks.useRegistrationForm.mockReturnValue(
-            makeHookState({
-                errors: {
-                    terms: { message: 'You must accept the terms and the privacy policy.' },
-                },
-            })
-        );
-
-        render(<RegistrationForm />);
-
-        expect(screen.getByText('You must accept the terms and the privacy policy.')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Register' })).toHaveAttribute('href', '/register');
     });
 
     it('Shows loading state and disables submit while submitting', () => {
-        mocks.useRegistrationForm.mockReturnValue(
-            makeHookState({
+        mocks.useLoginForm.mockReturnValue(
+            makeLoginHookState({
                 isSubmitting: true,
             })
         );
 
-        render(<RegistrationForm />);
+        render(<LoginForm />);
 
-        const submitButton = screen.getByRole('button', { name: /creating account/i });
-        expect(submitButton).toBeDisabled();
+        expect(screen.getByRole('button', { name: /signing you in/i })).toBeDisabled();
     });
 
-    it('Shows loading state for Google button while Google sign-up is in progress', () => {
+    it('Disables submit while Google auth is in progress', () => {
         mocks.useSocialAuth.mockReturnValue({
             isGoogleSubmitting: true,
             onGoogleAuth: mocks.onGoogleAuth,
         });
 
-        render(<RegistrationForm />);
+        render(<LoginForm />);
 
+        expect(screen.getByRole('button', { name: /sign in$/i })).toBeDisabled();
         expect(screen.getByRole('button', { name: /continuing with google/i })).toBeDisabled();
     });
 
     it('Calls onGoogleAuth when Google button is clicked', () => {
-        render(<RegistrationForm />);
+        render(<LoginForm />);
 
         fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
@@ -225,7 +161,7 @@ describe('RegistrationForm Component', () => {
     });
 
     it('Wires form submit through handleSubmit', () => {
-        const { container } = render(<RegistrationForm />);
+        const { container } = render(<LoginForm />);
         const form = container.querySelector('form');
 
         expect(form).toBeInTheDocument();

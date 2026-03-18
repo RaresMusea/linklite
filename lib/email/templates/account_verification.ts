@@ -1,4 +1,4 @@
-import { escapeHtml, getBrandLogoUrl } from '@/lib/email/templates/common';
+import { escapeHtml, getBrandLogoUrl, getEmailFooterHtml, getEmailFooterText } from '@/lib/email/templates/common';
 
 type AccountVerificationTemplateParams = {
     name?: string | null;
@@ -11,6 +11,8 @@ export function accountVerificationTemplate({ name, verificationUrl }: AccountVe
     const safeGreeting = escapeHtml(greeting);
     const safeVerificationUrl = escapeHtml(verificationUrl);
     const logoUrl = escapeHtml(getBrandLogoUrl(verificationUrl));
+    const footerHtml = getEmailFooterHtml();
+    const footerText = getEmailFooterText();
 
     return {
         subject: 'Verify your LinkLite account',
@@ -24,6 +26,7 @@ export function accountVerificationTemplate({ name, verificationUrl }: AccountVe
             verificationUrl,
             '',
             'If you did not create this account, you can safely ignore this email.',
+            ...footerText,
         ].join('\n'),
         html: `
       <div style="background:#f6f6f8;padding:24px 12px;">
@@ -59,6 +62,7 @@ export function accountVerificationTemplate({ name, verificationUrl }: AccountVe
             </tr>
           </table>
           <p style="margin:0;color:#4b5563;">If you did not create this account, you can safely ignore this email.</p>
+          ${footerHtml}
         </div>
       </div>
     `,

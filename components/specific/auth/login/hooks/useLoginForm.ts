@@ -1,41 +1,38 @@
-import { useForm, useWatch } from 'react-hook-form';
-import { RegisterSchema, RegistrationInput } from '@/validation/RegisterSchema';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { signUp } from '@/app/(auth)/register/actions';
+import { LoginInput, LoginSchema } from '@/validation/LoginSchema';
+import { LoginResult, signIn } from '@/app/(auth)/signin/actions';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
-const REGISTER_TOAST_OPTIONS = {
-    duration: 5000,
+const LOGIN_TOAST_OPTIONS = {
+    duration: 3500,
     closeButton: true,
     dismissible: true,
     className:
         '!w-[min(92vw,640px)] !max-w-[640px] !bg-popover/90 !text-popover-foreground !border-border/70 !backdrop-blur-md',
 };
 
-const REGISTER_SUCCESS_TOAST_CLASS =
+const LOGIN_SUCCESS_TOAST_CLASS =
     '!w-[min(92vw,640px)] !max-w-[640px] register-success-toast !border !backdrop-blur-md';
 
-export function useRegistrationForm() {
+export function useLoginForm() {
+    const router = useRouter();
     const {
         register,
-        control,
         handleSubmit,
         setError,
         formState: { errors, isSubmitting },
-    } = useForm<RegistrationInput>({
-        resolver: zodResolver(RegisterSchema),
+    } = useForm<LoginInput>({
+        resolver: zodResolver(LoginSchema),
         defaultValues: {
-            name: '',
             email: '',
             password: '',
-            confirmPassword: '',
-            terms: false,
         },
     });
-    const passwordValue = useWatch({ control, name: 'password' });
 
-    const onSubmit = async (data: RegistrationInput) => {
-        const result = await signUp(data);
+    const onSubmit = async (data: LoginInput) => {
+        const result: LoginResult = await signIn(data);
 
         if (!result.success) {
             let hasFieldErrors = false;
@@ -45,7 +42,7 @@ export function useRegistrationForm() {
                     if (!messages?.length) continue;
                     hasFieldErrors = true;
 
-                    setError(field as keyof RegistrationInput, {
+                    setError(field as keyof LoginInput, {
                         type: 'server',
                         message: messages[0],
                     });
@@ -54,11 +51,11 @@ export function useRegistrationForm() {
 
             if (result.formError) {
                 toast.error(result.formError, {
-                    ...REGISTER_TOAST_OPTIONS,
+                    ...LOGIN_TOAST_OPTIONS,
                 });
             } else if (!hasFieldErrors) {
-                toast.error('Unable to create account. Please try again.', {
-                    ...REGISTER_TOAST_OPTIONS,
+                toast.error('Unable to log in into your account. Please try again.', {
+                    ...LOGIN_TOAST_OPTIONS,
                 });
             }
 
@@ -66,18 +63,12 @@ export function useRegistrationForm() {
         }
 
         toast.success(result.message, {
-            ...REGISTER_TOAST_OPTIONS,
-            className: REGISTER_SUCCESS_TOAST_CLASS,
+            ...LOGIN_TOAST_OPTIONS,
+            className: LOGIN_SUCCESS_TOAST_CLASS,
         });
+
+        router.replace('/post-login');
     };
 
-    return {
-        register,
-        control,
-        errors,
-        isSubmitting,
-        passwordValue,
-        handleSubmit,
-        onSubmit,
-    };
+    return { onSubmit, handleSubmit, errors, isSubmitting, register };
 }

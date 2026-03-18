@@ -5,10 +5,12 @@ import { RouteTransition } from '@/components/shared/layout/RouteTransition';
 
 export default function MainLayout({ children }: { children: ReactNode }) {
     return (
-        <>
+        <div className="flex min-h-screen flex-col">
             <Header />
-            <RouteTransition>{children}</RouteTransition>
+            <div className="flex-1">
+                <RouteTransition>{children}</RouteTransition>
+            </div>
             <Footer />
-        </>
+        </div>
     );
 }

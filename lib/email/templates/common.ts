@@ -7,6 +7,27 @@ export function escapeHtml(value: string): string {
         .replaceAll("'", '&#39;');
 }
 
+export function getEmailFooterText(): string[] {
+    return ['', 'Need help? Contact support@linklite.dev', 'Security issues: security@linklite.dev', '', '© LinkLite 2026'];
+}
+
+export function getEmailFooterHtml(): string {
+    return `
+      <hr style="border:0;border-top:1px solid #ececf1;margin:20px 0 14px 0;" />
+      <p style="margin:0 0 6px 0;font-size:13px;line-height:1.5;color:#6b7280;">
+        Need help? Contact
+        <a href="mailto:support@linklite.dev" style="color:#4b5563;text-decoration:none;font-weight:600;">support@linklite.dev</a>
+      </p>
+      <p style="margin:0;font-size:13px;line-height:1.5;color:#6b7280;">
+        Security issues:
+        <a href="mailto:security@linklite.dev" style="color:#4b5563;text-decoration:none;font-weight:600;">security@linklite.dev</a>
+      </p>
+      <p style="margin:10px 0 0 0;font-size:12px;line-height:1.4;color:#9ca3af;text-align:right;">
+        &copy; LinkLite 2026
+      </p>
+    `;
+}
+
 // TODO: Update with the actual linklite.png once deploying to preprod
 export function getBrandLogoUrl(sourceUrl: string): string {
     const explicitAssetBaseUrl = process.env.EMAIL_ASSETS_BASE_URL;

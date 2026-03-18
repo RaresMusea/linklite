@@ -106,4 +106,42 @@ describe('Register server action', () => {
         });
         expect(errorMock).toHaveBeenCalledTimes(1);
     });
+
+    it('Returns the same generic error when duplicate account code is returned', async () => {
+        vi.mocked(auth.api.signUpEmail).mockRejectedValueOnce({
+            code: 'USER_ALREADY_EXISTS',
+        });
+
+        const result = await signUp({
+            name: 'Jane Doe',
+            email: 'jane@example.com',
+            password: 'Strong_Ab',
+            confirmPassword: 'Strong_Ab',
+            terms: true,
+        });
+
+        expect(result).toEqual({
+            success: false,
+            formError: 'Failed to register. Please try again later.',
+        });
+    });
+
+    it('Returns the same generic error when provider-linked code is returned', async () => {
+        vi.mocked(auth.api.signUpEmail).mockRejectedValueOnce({
+            code: 'LINKED_ACCOUNT_ALREADY_EXISTS',
+        });
+
+        const result = await signUp({
+            name: 'Jane Doe',
+            email: 'jane@example.com',
+            password: 'Strong_Ab',
+            confirmPassword: 'Strong_Ab',
+            terms: true,
+        });
+
+        expect(result).toEqual({
+            success: false,
+            formError: 'Failed to register. Please try again later.',
+        });
+    });
 });
