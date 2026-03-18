@@ -98,4 +98,20 @@ describe('Sign in server action', () => {
         });
         expect(errorMock).toHaveBeenCalledTimes(1);
     });
+
+    it('Returns the same generic error when auth returns credential-specific code', async () => {
+        vi.mocked(auth.api.signInEmail).mockRejectedValueOnce({
+            code: 'INVALID_PASSWORD',
+        });
+
+        const result = await signIn({
+            email: 'jane@example.com',
+            password: 'Strong_Ab',
+        });
+
+        expect(result).toEqual({
+            success: false,
+            formError: 'Unable to sign in. Please check your credentials and try again.',
+        });
+    });
 });
