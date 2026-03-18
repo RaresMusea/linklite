@@ -1,4 +1,4 @@
-import 'server-only';
+'use server';
 
 import { logger } from '@/lib/logging/logger';
 import { auth } from '@/lib/auth/auth';
