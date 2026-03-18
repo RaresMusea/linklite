@@ -30,6 +30,10 @@ concurrency:
 
 env:
   DATABASE_URL: ${{secrets.DATABASE_URL}}
+  NODE_VERSION: "24"
+  BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL || 'http://localhost:3000' }}
+  BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET || 'build-only-better-auth-secret-change-me' }}
+  TRUSTED_ORIGINS: ${{ secrets.TRUSTED_ORIGINS || 'http://localhost:3000' }}
 
 
 jobs:
@@ -93,7 +97,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies
@@ -129,7 +133,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies (uses cache)
@@ -178,7 +182,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies (uses cache)
@@ -254,7 +258,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies (uses cache)
@@ -386,7 +390,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies (uses cache)
@@ -465,7 +469,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{env.NODE_VERSION}}
           cache: "pnpm"
 
       - name: Install dependencies (uses cache)

@@ -54,7 +54,7 @@ export function showQuotaExceededToast(nextError: ShortenErrorState) {
                                 size="sm"
                                 onClick={() => {
                                     toast.dismiss(id);
-                                    window.location.assign('/signup');
+                                    window.location.assign('/register');
                                 }}
                             >
                                 Sign up
