@@ -61,5 +61,11 @@ export const auth = betterAuth({
             });
         },
     },
+    socialProviders: {
+        google: {
+            clientId: process.env.GOOGLE_AUTH_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_AUTH_CLIENT_SECRET!,
+        },
+    },
     advanced: { defaultCookieAttributes: { secure: isProd, sameSite: 'lax', httpOnly: true } },
 });
