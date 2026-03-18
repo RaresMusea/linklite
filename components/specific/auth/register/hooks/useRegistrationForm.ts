@@ -71,5 +71,13 @@ export function useRegistrationForm() {
         });
     };
 
-    return { register, control, errors, isSubmitting, passwordValue, handleSubmit, onSubmit };
+    return {
+        register,
+        control,
+        errors,
+        isSubmitting,
+        passwordValue,
+        handleSubmit,
+        onSubmit,
+    };
 }

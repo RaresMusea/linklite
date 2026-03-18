@@ -143,4 +143,5 @@ describe('useRegistrationForm hook tests', () => {
             })
         );
     });
+
 });
