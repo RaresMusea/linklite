@@ -1,9 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { escapeHtml, getBrandLogoUrl } from '@/lib/email/templates/common';
+import { escapeHtml, getBrandLogoUrl, getEmailFooterHtml, getEmailFooterText } from '@/lib/email/templates/common';
 
 describe('Email template common helpers', () => {
     it('Escapes html-sensitive characters', () => {
         expect(escapeHtml(`A&B <tag> "x" 'y'`)).toBe('A&amp;B &lt;tag&gt; &quot;x&quot; &#39;y&#39;');
+    });
+
+    it('Builds a consistent professional email footer for plain text and html', () => {
+        const footerText = getEmailFooterText().join('\n');
+        const footerHtml = getEmailFooterHtml();
+
+        expect(footerText).toContain('Need help? Contact support@linklite.dev');
+        expect(footerText).toContain('Security issues: security@linklite.dev');
+        expect(footerText).toContain('© LinkLite 2026');
+
+        expect(footerHtml).toContain('mailto:support@linklite.dev');
+        expect(footerHtml).toContain('mailto:security@linklite.dev');
+        expect(footerHtml).toContain('&copy; LinkLite 2026');
+        expect(footerHtml).toContain('text-align:right');
+        expect(footerHtml).toContain('<hr');
     });
 
     it('Builds logo URL from source URL origin', () => {
