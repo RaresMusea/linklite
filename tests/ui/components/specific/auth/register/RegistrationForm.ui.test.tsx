@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 const mocks = vi.hoisted(() => ({
     useRegistrationForm: vi.fn(),
+    useSocialAuth: vi.fn(),
     register: vi.fn((name: string) => ({
         name,
         onChange: vi.fn(),
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
         return onValid({});
     }),
     onSubmit: vi.fn(),
+    onGoogleAuth: vi.fn(),
 }));
 
 vi.mock('next/link', () => ({
@@ -92,6 +94,28 @@ vi.mock('@/components/specific/auth/register/hooks/useRegistrationForm', () => (
     useRegistrationForm: mocks.useRegistrationForm,
 }));
 
+vi.mock('@/components/specific/auth/social/hooks/useSocialAuth', () => ({
+    useSocialAuth: mocks.useSocialAuth,
+}));
+
+vi.mock('@/components/specific/auth/social/SocialAuthButtons', () => ({
+    SocialAuthButtons: ({
+        mode,
+        isGoogleSubmitting,
+        isDisabled,
+        onGoogleAuthAction,
+    }: {
+        mode: 'signin' | 'signup';
+        isGoogleSubmitting: boolean;
+        isDisabled?: boolean;
+        onGoogleAuthAction: () => void;
+    }) => (
+        <button type="button" disabled={isDisabled} onClick={onGoogleAuthAction}>
+            {isGoogleSubmitting ? 'Redirecting to Google...' : mode === 'signup' ? 'Sign up with Google' : 'Sign in with Google'}
+        </button>
+    ),
+}));
+
 import { RegistrationForm } from '@/components/specific/auth/register/RegistrationForm';
 
 function makeHookState(
@@ -123,6 +147,10 @@ describe('RegistrationForm Component', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mocks.useRegistrationForm.mockReturnValue(makeHookState());
+        mocks.useSocialAuth.mockReturnValue({
+            isGoogleSubmitting: false,
+            onGoogleAuth: mocks.onGoogleAuth,
+        });
     });
 
     it('Renders auth copy, base fields, and footer links', () => {
@@ -134,6 +162,7 @@ describe('RegistrationForm Component', () => {
         expect(screen.getByLabelText('Full name')).toBeInTheDocument();
         expect(screen.getByLabelText('Email')).toBeInTheDocument();
         expect(screen.getByLabelText('Password')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Sign up with Google' })).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/signin');
     });
 
@@ -176,6 +205,25 @@ describe('RegistrationForm Component', () => {
 
         const submitButton = screen.getByRole('button', { name: /creating account/i });
         expect(submitButton).toBeDisabled();
+    });
+
+    it('Shows loading state for Google button while Google sign-up is in progress', () => {
+        mocks.useSocialAuth.mockReturnValue({
+            isGoogleSubmitting: true,
+            onGoogleAuth: mocks.onGoogleAuth,
+        });
+
+        render(<RegistrationForm />);
+
+        expect(screen.getByRole('button', { name: /redirecting to google/i })).toBeDisabled();
+    });
+
+    it('Calls onGoogleAuth when Google button is clicked', () => {
+        render(<RegistrationForm />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Sign up with Google' }));
+
+        expect(mocks.onGoogleAuth).toHaveBeenCalledTimes(1);
     });
 
     it('Wires form submit through handleSubmit', () => {

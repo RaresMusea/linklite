@@ -9,9 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Controller } from 'react-hook-form';
 import { useRegistrationForm } from '@/components/specific/auth/register/hooks/useRegistrationForm';
 import { FormField } from '@/components/shared/auth/FormField';
+import { useSocialAuth } from '@/components/specific/auth/social/hooks/useSocialAuth';
+import { SocialAuthButtons } from '@/components/specific/auth/social/SocialAuthButtons';
 
 export function RegistrationForm() {
     const { register, control, errors, isSubmitting, passwordValue, handleSubmit, onSubmit } = useRegistrationForm();
+    const { isGoogleSubmitting, onGoogleAuth } = useSocialAuth();
+    const isAnySubmitting = isSubmitting || isGoogleSubmitting;
 
     return (
         <AuthCard
@@ -28,6 +32,13 @@ export function RegistrationForm() {
             }
         >
             <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
+                <SocialAuthButtons
+                    mode="signup"
+                    isGoogleSubmitting={isGoogleSubmitting}
+                    isDisabled={isAnySubmitting}
+                    onGoogleAuthAction={onGoogleAuth}
+                />
+
                 <FormField label="Full name" id="full-name" error={errors.email?.message}>
                     <IconInput
                         icon={User}
@@ -111,7 +122,7 @@ export function RegistrationForm() {
                     </p>
                 ) : null}
 
-                <Button type="submit" size="lg" className="mt-2 w-full" disabled={isSubmitting}>
+                <Button type="submit" size="lg" className="mt-2 w-full" disabled={isAnySubmitting}>
                     {isSubmitting ? (
                         <>
                             <Loader2 className="h-4 w-4 animate-spin" />
