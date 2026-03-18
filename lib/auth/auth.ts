@@ -6,6 +6,13 @@ import { sendEmail } from '@/lib/email/send_email';
 import { resetPasswordTemplate } from '@/lib/email/templates/reset_password';
 
 const isProd = process.env.NODE_ENV === 'production'; // TODO move this logic to shared lib
+const fallbackBaseURL = 'http://localhost:3000';
+const betterAuthBaseURL = process.env.BETTER_AUTH_URL ?? fallbackBaseURL;
+const betterAuthSecret = process.env.BETTER_AUTH_SECRET ?? 'build-only-better-auth-secret-change-me';
+const trustedOrigins = (process.env.TRUSTED_ORIGINS ?? betterAuthBaseURL)
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
 function toTokenVerificationRoute(url: string): string {
     try {
@@ -25,9 +32,9 @@ export const auth = betterAuth({
         provider: 'postgresql',
     }),
 
-    baseURL: process.env.BETTER_AUTH_URL!,
-    secret: process.env.BETTER_AUTH_SECRET!,
-    trustedOrigins: process.env.TRUSTED_ORIGINS!.split(','),
+    baseURL: betterAuthBaseURL,
+    secret: betterAuthSecret,
+    trustedOrigins,
 
     emailAndPassword: {
         enabled: true,
