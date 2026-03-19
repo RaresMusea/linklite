@@ -58,7 +58,7 @@ TRUSTED_ORIGINS="$(getp TRUSTED_ORIGINS)"
 GOOGLE_AUTH_CLIENT_ID="$(getp GOOGLE_AUTH_CLIENT_ID)"
 GOOGLE_AUTH_CLIENT_SECRET="$(getp GOOGLE_AUTH_CLIENT_SECRET)"
 AWS_ACCESS_KEY_ID="$(getp AWS_ACCESS_KEY_ID)"
-AWS_ACCESS_KEY_SECRET="$(getp AWS_ACCESS_KEY_SECRET)"
+AWS_SECRET_ACCESS_KEY="$(getp AWS_SECRET_ACCESS_KEY)"
 
 REDIS_URL="redis://:${REDIS_PASSWORD}@linklite-redis:6379"
 
@@ -92,7 +92,7 @@ kubectl -n "${NAMESPACE}" create secret generic linklite-secrets \
   --from-literal=GOOGLE_AUTH_CLIENT_ID="${GOOGLE_AUTH_CLIENT_ID}" \
   --from-literal=GOOGLE_AUTH_CLIENT_SECRET="${GOOGLE_AUTH_CLIENT_SECRET}" \
   --from-literal=AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \
-  --from-literal=AWS_ACCESS_KEY_SECRET="${AWS_ACCESS_KEY_SECRET}" \
+  --from-literal=AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "Secrets synced."
