@@ -64,6 +64,12 @@ export function LoginForm() {
                     </FormField>
                 </div>
 
+                <div className="flex justify-end">
+                    <Link href="/forgot-password" className="text-sm font-medium text-primary hover:underline">
+                        Forgot password?
+                    </Link>
+                </div>
+
                 <Button type="submit" size="lg" className="mt-2 w-full" disabled={isAnySubmitting}>
                     {isSubmitting ? (
                         <>
