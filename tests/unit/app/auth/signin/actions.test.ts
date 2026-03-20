@@ -45,6 +45,9 @@ describe('Sign in server action', () => {
         if (!result.success) {
             expect(result.fieldErrors?.email).toContain('Invalid email address');
             expect(result.fieldErrors?.password).toContain('Password must be at least 8 characters long');
+            expect(result.fieldErrors?.password).toContain('Password must contain at least one uppercase letter');
+            expect(result.fieldErrors?.password).toContain('Password must contain at least one special character (!@#_)');
+            expect(result.formError).toBeUndefined();
         }
         expect(vi.mocked(auth.api.signInEmail)).not.toHaveBeenCalled();
     });

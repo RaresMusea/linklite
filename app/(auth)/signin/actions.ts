@@ -3,26 +3,17 @@
 import { logger } from '@/lib/logging/logger';
 import { auth } from '@/lib/auth/auth';
 import { LoginInput, LoginSchema } from '@/validation/LoginSchema';
-import { getTreeifiedError } from '@/lib/zod/error_treeifier';
+import { AuthActionResult, validateAuthActionInput } from '@/lib/server/action_utils';
 
 const loginLogger = logger.component('auth.login.login-server').child(undefined, ['auth', 'login']);
 
-export type LoginResult =
-    | {
-          success: true;
-          message: string;
-      }
-    | {
-          success: false;
-          fieldErrors?: Partial<Record<keyof LoginInput, string[]>>;
-          formError?: string;
-      };
+export type LoginResult = AuthActionResult<LoginInput>;
 
 export async function signIn(input: LoginInput): Promise<LoginResult> {
-    const parsedInput = LoginSchema.safeParse(input);
+    const parsedInput = validateAuthActionInput(LoginSchema, input);
 
     if (!parsedInput.success) {
-        return getTreeifiedError(parsedInput);
+        return parsedInput;
     }
 
     const { email, password } = parsedInput.data;
