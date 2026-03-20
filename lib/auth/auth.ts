@@ -27,6 +27,22 @@ function toTokenVerificationRoute(url: string): string {
     }
 }
 
+function toResetPasswordRoute(url: string): string {
+    try {
+        const parsedUrl = new URL(url);
+        const tokenFromQuery = parsedUrl.searchParams.get('token');
+        const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
+        const tokenFromPath = pathSegments[pathSegments.length - 1];
+        const token = tokenFromQuery || tokenFromPath;
+
+        if (!token) return url;
+
+        return `${parsedUrl.origin}/reset-password/${encodeURIComponent(token)}`;
+    } catch {
+        return url;
+    }
+}
+
 export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: 'postgresql',
@@ -41,7 +57,7 @@ export const auth = betterAuth({
         sendResetPassword: async ({ user, url }) => {
             const template = resetPasswordTemplate({
                 name: user.name,
-                resetUrl: url,
+                resetUrl: toResetPasswordRoute(url),
             });
 
             await sendEmail({

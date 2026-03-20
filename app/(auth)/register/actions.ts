@@ -1,35 +1,19 @@
 'use server';
 
-import { z } from 'zod';
 import { RegisterSchema, RegistrationInput } from '@/validation/RegisterSchema';
 import { auth } from '@/lib/auth/auth';
 import { logger } from '@/lib/logging/logger';
+import { AuthActionResult, validateAuthActionInput } from '@/lib/server/action_utils';
 
 const registrationLogger = logger.component('auth.register.register-server').child(undefined, ['auth', 'register']);
 
-export type RegistrationResult =
-    | {
-          success: true;
-          message: string;
-      }
-    | {
-          success: false;
-          fieldErrors?: Partial<Record<keyof RegistrationInput, string[]>>;
-          formError?: string;
-      };
+export type RegistrationResult = AuthActionResult<RegistrationInput>;
 
 export async function signUp(input: RegistrationInput): Promise<RegistrationResult> {
-    const parsedInput = RegisterSchema.safeParse(input);
+    const parsedInput = validateAuthActionInput(RegisterSchema, input);
 
     if (!parsedInput.success) {
-        const tree = z.treeifyError(parsedInput.error);
-
-        return {
-            success: false,
-            fieldErrors: Object.fromEntries(
-                Object.entries(tree.properties ?? {}).map(([key, value]) => [key, value?.errors ?? []])
-            ) as Partial<Record<keyof RegistrationInput, string[]>>,
-        };
+        return parsedInput;
     }
 
     const { name, email, password } = parsedInput.data;

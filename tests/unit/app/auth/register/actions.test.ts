@@ -46,8 +46,12 @@ describe('Register server action', () => {
         if (!result.success) {
             expect(result.fieldErrors?.name).toContain('Name is too short');
             expect(result.fieldErrors?.email).toContain('Invalid email address');
+            expect(result.fieldErrors?.password).toContain('Password must be at least 8 characters long');
+            expect(result.fieldErrors?.password).toContain('Password must contain at least one uppercase letter');
+            expect(result.fieldErrors?.password).toContain('Password must contain at least one special character (!@#_)');
             expect(result.fieldErrors?.confirmPassword).toContain('Passwords do not match');
             expect(result.fieldErrors?.terms).toContain('You must accept the terms and the privacy policy.');
+            expect(result.formError).toBeUndefined();
         }
         expect(vi.mocked(auth.api.signUpEmail)).not.toHaveBeenCalled();
     });

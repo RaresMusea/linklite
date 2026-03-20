@@ -25,7 +25,7 @@ export function AuthBadge({ motionProps }: AuthBadgeProps) {
             variants={badgeVariants}
         >
             <div className="inline-flex items-center gap-3 rounded-3xl border border-border/60 bg-card/95 px-3 py-2.5 pr-4 shadow-md backdrop-blur">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-linear-to-br from-primary to-primary/70 text-primary-foreground shadow-sm">
                     <Link2 className="h-5 w-5" />
                 </div>
                 <p className="text-[1.95rem] leading-none font-semibold tracking-tight text-foreground">
